@@ -7,8 +7,11 @@ import { createRequire } from "node:module";
 import { Command } from "commander";
 import { handlePreToolUse } from "../adapters/claude/hook.js";
 import { mergeSettings } from "../adapters/claude/installer.js";
+import { formatDoctorReport, runDoctor } from "./doctor.js";
+import { formatReplayReport, replaySession } from "./replay.js";
 import {
   BUNDLED_POLICY_PATH,
+  railguardHome,
   resolvePolicyPath,
   sessionsDir,
   userPolicyPath,
@@ -193,6 +196,42 @@ trace
       );
       process.exit(1);
     }
+  });
+
+program
+  .command("doctor")
+  .description("check that the rail is installed, intact, and tamper-free")
+  .option("--home <dir>", "railguard home", railguardHome())
+  .option("--settings <path>", "agent settings file", join(homedir(), ".claude", "settings.json"))
+  .option("--no-path-check", "skip checking whether railguard is on PATH")
+  .action(async (opts: { home: string; settings: string; pathCheck: boolean }) => {
+    const report = await runDoctor({
+      home: opts.home,
+      settingsPath: opts.settings,
+      checkPath: opts.pathCheck,
+    });
+    console.log(formatDoctorReport(report));
+    if (!report.healthy) process.exit(1);
+  });
+
+program
+  .command("replay")
+  .description("re-evaluate a recorded session under a (new) policy — nothing is executed")
+  .argument("[file]", "trace file (default: newest session)")
+  .option("--policy <path>", "candidate policy (default: your installed policy)")
+  .option("--strict", "exit 1 if any event would be blocked", false)
+  .action(async (file: string | undefined, opts: { policy?: string; strict: boolean }) => {
+    const target = file ?? (await newestSessionFile());
+    if (!target) return failClosed("no session traces found");
+    const integrity = await verifyTrace(target);
+    if (!integrity.ok) {
+      return failClosed(`refusing to replay a tampered trace (${integrity.reason ?? "?"} at ${integrity.brokenAt})`);
+    }
+    const events = await readTrace(target);
+    const policy = loadPolicy(readFileSync(resolvePolicyPath(opts.policy), "utf8"));
+    const report = replaySession(events, policy);
+    console.log(formatReplayReport(report));
+    if (opts.strict && report.wouldBlock.length > 0) process.exit(1);
   });
 
 program.parseAsync(process.argv).catch((err: unknown) => {

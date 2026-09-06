@@ -26,6 +26,14 @@ function isRailguardEntry(entry: HookEntry): boolean {
   return Array.isArray(entry.hooks) && entry.hooks.some((h) => h.command === RAILGUARD_HOOK_COMMAND);
 }
 
+/** true when the settings already carry the railguard hook entry. */
+export function hasRailguardHook(settings: unknown): boolean {
+  if (typeof settings !== "object" || settings === null) return false;
+  const hooks = (settings as SettingsWithHooks).hooks;
+  const preToolUse = hooks?.PreToolUse;
+  return Array.isArray(preToolUse) && preToolUse.some(isRailguardEntry);
+}
+
 /** Pure merge: ensure exactly one railguard PreToolUse entry, preserve all
  *  other settings. Idempotent and non-mutating. */
 export function mergeSettings(existing: unknown): MergeResult {
