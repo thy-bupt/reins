@@ -108,8 +108,28 @@ export function compilePattern(pattern: string): RegExp {
 
 const matchCache = new Map<string, (p: string) => boolean>();
 
-/** path glob match: full absolute path match, or basename match for slash-free globs. */
+/** Shell invocation per platform. posix = /bin/bash -c (or REINS_SHELL),
+ *  win32 = cmd.exe /d /s /c (or an explicit override such as pwsh). */
+export function resolveShellCommand(
+  platform: "posix" | "win32",
+  command: string,
+  shellOverride?: string,
+): { file: string; args: string[] } {
+  if (shellOverride) {
+    return { file: shellOverride, args: ["-c", command] };
+  }
+  if (platform === "win32") {
+    const comspec = process.env["ComSpec"] ?? "cmd.exe";
+    return { file: comspec, args: ["/d", "/s", "/c", command] };
+  }
+  return { file: "/bin/bash", args: ["-c", command] };
+}
+
+/** path glob match: full absolute path match, or basename match for slash-free globs.
+ *  Windows backslashes are normalized to forward slashes first so forward-slash
+ *  globs match native Windows paths (picomatch treats `\` as a literal). */
 export function matchesPathGlob(glob: string, filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, "/");
   let matcher = matchCache.get(glob);
   if (!matcher) {
     const pm = picomatch(glob, { dot: true });
@@ -117,5 +137,5 @@ export function matchesPathGlob(glob: string, filePath: string): boolean {
     matcher = (p: string) => pm(p) || bare(p);
     matchCache.set(glob, matcher);
   }
-  return matcher(filePath);
+  return matcher(normalized);
 }

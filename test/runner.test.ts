@@ -41,16 +41,18 @@ describe("runGuarded", () => {
   it("runs the command in the requested cwd", async () => {
     const dir = await tmpDir();
     const trace = await TraceWriter.start(await tmpDir());
-    const result = await runGuarded({ command: "pwd", trace, cwd: dir });
+    const pwdCommand = process.platform === "win32" ? "cd" : "pwd";
+    const result = await runGuarded({ command: pwdCommand, trace, cwd: dir });
 
     expect(result.exitCode).toBe(0);
     const events = await readTrace(trace.filePath);
-    expect(events[0]!.input).toEqual({ command: "pwd", cwd: dir });
+    expect(events[0]!.input).toEqual({ command: pwdCommand, cwd: dir });
   });
 
   it("propagates stdin=ignore and does not hang on commands that read stdin", async () => {
     const trace = await TraceWriter.start(await tmpDir());
-    const result = await runGuarded({ command: "cat", trace });
+    // `more` reads stdin to EOF on both cmd.exe and posix shells
+    const result = await runGuarded({ command: "more", trace });
     expect(result.exitCode).toBe(0);
   });
 

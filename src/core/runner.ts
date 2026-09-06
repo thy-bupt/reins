@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import type { DecisionResult } from "./decider.js";
+import { resolveShellCommand } from "./matchers.js";
 import { TraceWriter } from "./trace.js";
 
 export interface RunGuardedOptions {
@@ -37,12 +38,16 @@ export async function runGuarded(opts: RunGuardedOptions): Promise<RunResult> {
     return { blocked: true, exitCode: 2 };
   }
 
-  const shell = opts.shell ?? process.env.REINS_SHELL ?? "/bin/bash";
+  const { file, args } = resolveShellCommand(
+    process.platform === "win32" ? "win32" : "posix",
+    opts.command,
+    opts.shell ?? process.env.REINS_SHELL,
+  );
   const input: Record<string, unknown> = { command: opts.command };
   if (opts.cwd !== undefined) input.cwd = opts.cwd;
 
   const exitCode = await new Promise<number>((resolve) => {
-    const child = spawn(shell, ["-c", opts.command], {
+    const child = spawn(file, args, {
       cwd: opts.cwd,
       stdio: ["ignore", "inherit", "inherit"],
     });
