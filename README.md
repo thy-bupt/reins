@@ -7,7 +7,8 @@ npm i -g reins
 reins init claude
 ```
 
-That's it. Your Claude Code sessions now run behind a policy gate.
+That's it. Your Claude Code sessions now run behind a policy gate — restart
+the agent session (or run `/hooks`) so it loads the new hook.
 
 ## The problem
 

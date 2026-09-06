@@ -106,13 +106,17 @@ program
 program
   .command("init")
   .description(`install reins for a coding agent (${HOOK_ADAPTER_NAMES.join(", ")}) or component (skills, mcp)`)
-  .argument("<adapter>", `target: ${HOOK_ADAPTER_NAMES.join(" | ")} | skills | mcp`)
+  .argument("[adapter]", `target: ${HOOK_ADAPTER_NAMES.join(" | ")} | skills | mcp`)
   .option("--policy <path>", "policy file to install as your default")
   .option(
     "--settings <path>",
     "agent settings/config file override (where applicable)",
   )
-  .action(async (adapter: string, opts: { policy?: string; settings?: string }) => {
+  .action(async (adapter: string | undefined, opts: { policy?: string; settings?: string }) => {
+    if (!adapter) {
+      console.log(`usage: reins init <target>\ntargets: ${HOOK_ADAPTER_NAMES.join(", ")}, skills, mcp\nexample: reins init claude`);
+      process.exit(1);
+    }
     const isHookAdapter = adapter in HOOK_ADAPTERS;
     if (!isHookAdapter && adapter !== "skills" && adapter !== "mcp") {
       return failClosed(`unknown adapter "${adapter}" (supported: ${HOOK_ADAPTER_NAMES.join(", ")}, skills, mcp)`);
@@ -260,7 +264,8 @@ program
       }
     }
 
-    console.log("\nreins is live. Try: reins trace list");
+    console.log("\nreins is live. Restart your agent session (or run /hooks) to load the hook.");
+    console.log("Try: reins trace list · reins policy eval \"npm test\" · reins doctor");
   });
 
 program
@@ -469,9 +474,13 @@ trace
 program
   .command("uninstall")
   .description(`remove the reins hook for an agent (${HOOK_ADAPTER_NAMES.join(", ")}) or component (skills, mcp)`)
-  .argument("<adapter>", `target: ${HOOK_ADAPTER_NAMES.join(" | ")} | skills | mcp`)
+  .argument("[adapter]", `target: ${HOOK_ADAPTER_NAMES.join(" | ")} | skills | mcp`)
   .option("--settings <path>", "agent settings/config file override (where applicable)")
-  .action(async (adapter: string, opts: { settings?: string }) => {
+  .action(async (adapter: string | undefined, opts: { settings?: string }) => {
+    if (!adapter) {
+      console.log(`usage: reins uninstall <target>\ntargets: ${HOOK_ADAPTER_NAMES.join(", ")}, skills, mcp`);
+      process.exit(1);
+    }
     const isHookAdapter = adapter in HOOK_ADAPTERS;
     if (!isHookAdapter && adapter !== "skills" && adapter !== "mcp") {
       return failClosed(`unknown adapter "${adapter}" (supported: ${HOOK_ADAPTER_NAMES.join(", ")}, skills, mcp)`);

@@ -42,6 +42,7 @@ reins 就是补在中间的轻量层：**策略 + 审计 + 回放**，进程内�
 npm i -g reins
 reins init claude     # 安装策略 + PreToolUse hook（自动备份原 settings.json）
 ```
+重启 agent 会话（或执行 /hooks）以加载新 hook。
 
 ```console
 $ # agent 想执行 rm -rf：
