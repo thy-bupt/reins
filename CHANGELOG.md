@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is Se
 ## [Unreleased]
 
 ### Added
+- **Operation snapshots** — `reins snapshot` builds a forensic markdown report per session:
+  integrity verdict (tampered traces are flagged, not refused), policy sha256
+  fingerprint, full decision timeline, git context of touched files (repo, HEAD,
+  dirty state, optional `--with-diffs`) and recovery hints (`git restore`,
+  `git reflog`).
 - **Windows support** — cross-platform process layer (`cmd.exe /d /s /c` on
   win32, `REINS_SHELL` override), backslash-aware path glob matching,
   platform-aware tests, and a `windows-latest` CI job. Validated end-to-end on

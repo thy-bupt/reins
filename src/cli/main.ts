@@ -20,6 +20,7 @@ import { piExtensionSource } from "../adapters/pi/installer.js";
 import { sessionIdFrom } from "../adapters/common.js";
 import { formatDoctorReport, runDoctor } from "./doctor.js";
 import { formatReplayReport, replaySession } from "./replay.js";
+import { buildSnapshotMarkdown, collectGitContext, deriveAgentAndSession, policySha256, type SnapshotData } from "./snapshot.js";
 import {
   BUNDLED_POLICY_PATH,
   reinsHome,
@@ -351,6 +352,56 @@ program
     const report = replaySession(events, policy);
     console.log(formatReplayReport(report));
     if (opts.strict && report.wouldBlock.length > 0) process.exit(1);
+  });
+
+program
+  .command("snapshot")
+  .description("emit a forensic operation-snapshot report (markdown) for a session — works even on tampered traces")
+  .argument("[file]", "trace file (default: newest session)")
+  .option("--policy <path>", "policy file to fingerprint (default: your installed policy)")
+  .option("--out <path>", "output markdown path")
+  .option("--with-diffs", "include current `git diff HEAD` for touched files", false)
+  .action(async (file: string | undefined, opts: { policy?: string; out?: string; withDiffs: boolean }) => {
+    const target = file ?? (await newestSessionFile());
+    if (!target) return failClosed("no session traces found");
+    const events = await readTrace(target);
+    const integrity = await verifyTrace(target);
+    const policyText = readFileSync(resolvePolicyPath(opts.policy), "utf8");
+    const policy = loadPolicy(policyText);
+
+    const { agent, sessionId } = deriveAgentAndSession(target);
+    const filePaths = events
+      .map((e) => (typeof e.input === "object" && e.input !== null ? (e.input as Record<string, unknown>)["file_path"] : undefined))
+      .filter((p): p is string => typeof p === "string" && p.trim() !== "");
+    const git = await collectGitContext(filePaths, opts.withDiffs);
+
+    const data: SnapshotData = {
+      sourceFile: target,
+      agent,
+      sessionId,
+      eventCount: events.length,
+      timeRange: { first: events[0]?.ts, last: events[events.length - 1]?.ts },
+      integrity,
+      policy: {
+        name: policy.name,
+        rules: policy.rules.length,
+        sha256: policySha256(policyText),
+        source: resolvePolicyPath(opts.policy),
+      },
+      git,
+      denied: events.filter((e) => e.decision === "deny"),
+      allowed: events.filter((e) => e.decision !== "deny"),
+      fileWrites: events.filter((e) => typeof (e.input as Record<string, unknown>)?.["file_path"] === "string"),
+      generatedAt: new Date().toISOString(),
+    };
+    const md = buildSnapshotMarkdown(data);
+    const out = opts.out ?? `reins-snapshot-${agent}-${sessionId.replace(/[:.]/g, "-").slice(0, 40)}.md`;
+    await writeFile(out, md, "utf8");
+    console.log(`snapshot written: ${out}`);
+    console.log(
+      `events: ${events.length}, chain: ${integrity.ok ? "OK" : `TAMPERED (${integrity.reason} at event ${integrity.brokenAt})`}` +
+        `${git ? `, git: ${git.repoRoot}` : ", git: none"}`,
+    );
   });
 
 program.parseAsync(process.argv).catch((err: unknown) => {

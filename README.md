@@ -26,6 +26,7 @@ reins is the lightweight layer between them: policy + audit + replay, in process
 - **Fail-closed by default** — a malformed hook payload, an unloadable policy, or a tampered trace blocks instead of allowing. The exact opposite of the failure mode in #32990.
 - **Replay** — `reins replay <session> --policy stricter.yaml` re-evaluates a recorded session against a candidate policy and reports what *would* have been blocked. Nothing is executed.
 - **Doctor** — `reins doctor` checks policy validity, hook installation, and trace integrity, and tells you when you're running fail-open.
+- **Operation snapshots** — `reins snapshot` emits a forensic markdown report when you need to look back: hash-chain verdict, policy fingerprint, full decision timeline, the git state of every touched file, and recovery hints (`git restore`, `git reflog`). Works even on tampered traces — evidence preserved, tampering flagged.
 
 ## Supported agents
 
