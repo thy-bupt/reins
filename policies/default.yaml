@@ -1,0 +1,92 @@
+# railguard default policy — safe starting point, tune to taste.
+# Schema: version 1. Actions: allow | deny | ask. First matching rule wins.
+version: 1
+name: railguard-default
+default: allow
+
+rules:
+  - id: rm-recursive
+    kind: command
+    action: deny
+    program: rm
+    flags: ["-r", "-R", "--recursive", "-d", "--dir"]
+    reason: "Recursive deletion is destructive and hard to undo"
+
+  - id: git-force-push
+    kind: command
+    action: deny
+    program: git
+    subcommand: push
+    flags: ["--force", "-f"]
+    reason: "Force push rewrites shared history"
+
+  - id: git-force-with-lease
+    kind: command
+    action: ask
+    program: git
+    subcommand: push
+    flags: ["--force-with-lease"]
+    reason: "Force-with-lease is safer but still rewrites remote history"
+
+  - id: git-reset-hard
+    kind: command
+    action: ask
+    program: git
+    subcommand: reset
+    flags: ["--hard"]
+    reason: "git reset --hard discards uncommitted work"
+
+  - id: pipe-to-shell
+    kind: command
+    action: deny
+    pattern: "\\|\\s*(ba|z|da)?sh(\\s|$)"
+    reason: "Piping into a shell executes unreviewed code"
+
+  - id: remote-install-script
+    kind: command
+    action: deny
+    pattern: "(curl|wget)[^|]*\\|\\s*(ba|z|da)?sh"
+    reason: "Running a downloaded script without inspection"
+
+  - id: fork-bomb
+    kind: command
+    action: deny
+    pattern: ":\\(\\)\\s*\\{[^}]*\\};:"
+    reason: "Fork bomb pattern"
+
+  - id: mkfs
+    kind: command
+    action: deny
+    program: mkfs
+    reason: "Formatting a filesystem is destructive"
+
+  - id: disk-wipe
+    kind: command
+    action: deny
+    program: dd
+    flags: ["of=/dev/"]
+    reason: "Raw write to a device node can wipe a disk"
+
+  - id: protect-dotenv
+    kind: path
+    action: deny
+    path: "**/.env*"
+    reason: "Secrets file — read it yourself, never let an agent rewrite it"
+
+  - id: protect-ssh
+    kind: path
+    action: deny
+    path: "**/.ssh/**"
+    reason: "SSH keys and configuration"
+
+  - id: protect-aws-credentials
+    kind: path
+    action: deny
+    path: "**/.aws/**"
+    reason: "Cloud credentials"
+
+  - id: protect-git-dir
+    kind: path
+    action: deny
+    path: "**/.git/**"
+    reason: "Git internals — use git commands instead of editing .git"
