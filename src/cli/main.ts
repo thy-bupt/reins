@@ -1,23 +1,28 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
-import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { Command } from "commander";
 import { handlePreToolUse as handleClaude } from "../adapters/claude/hook.js";
-import { mergeSettings as mergeClaudeSettings } from "../adapters/claude/installer.js";
+import { mergeSettings as mergeClaudeSettings, REINS_HOOK_COMMAND } from "../adapters/claude/installer.js";
 import { handleBeforeTool as handleGemini } from "../adapters/gemini/hook.js";
-import { mergeGeminiSettings } from "../adapters/gemini/installer.js";
+import { mergeGeminiSettings, GEMINI_HOOK_COMMAND } from "../adapters/gemini/installer.js";
 import { handlePreToolUse as handleGrok } from "../adapters/grok/hook.js";
-import { grokHooksFileContent } from "../adapters/grok/installer.js";
+import { grokHooksFileContent, GROK_HOOK_COMMAND } from "../adapters/grok/installer.js";
 import { handlePreToolUse as handleCodex } from "../adapters/codex/hook.js";
-import { codexHooksFileContent, ensureHooksFeature } from "../adapters/codex/installer.js";
+import { codexHooksFileContent, ensureHooksFeature, CODEX_HOOK_COMMAND } from "../adapters/codex/installer.js";
 import { handleToolExecute as handleOpenCode } from "../adapters/opencode/hook.js";
-import { opencodePluginSource } from "../adapters/opencode/installer.js";
+import { opencodePluginSource, OPENCODE_PLUGIN_COMMAND } from "../adapters/opencode/installer.js";
 import { handleToolCall as handlePi } from "../adapters/pi/hook.js";
-import { piExtensionSource } from "../adapters/pi/installer.js";
-import { sessionIdFrom } from "../adapters/common.js";
+import { piExtensionSource, PI_EXTENSION_COMMAND } from "../adapters/pi/installer.js";
+import {
+  isGeneratedByReins,
+  removeHooksEntry,
+  sessionIdFrom,
+} from "../adapters/common.js";
+import { formatTraceShow } from "./show.js";
 import { formatDoctorReport, runDoctor } from "./doctor.js";
 import { formatReplayReport, replaySession } from "./replay.js";
 import { buildSnapshotMarkdown, collectGitContext, deriveAgentAndSession, policySha256, type SnapshotData } from "./snapshot.js";
@@ -402,6 +407,129 @@ program
       `events: ${events.length}, chain: ${integrity.ok ? "OK" : `TAMPERED (${integrity.reason} at event ${integrity.brokenAt})`}` +
         `${git ? `, git: ${git.repoRoot}` : ", git: none"}`,
     );
+  });
+
+trace
+  .command("show")
+  .description("render a session ledger as a human-readable timeline")
+  .argument("[file]", "trace file (default: newest session)")
+  .action(async (file?: string) => {
+    const target = file ?? (await newestSessionFile());
+    if (!target) return failClosed("no session traces found");
+    const events = await readTrace(target);
+    const integrity = await verifyTrace(target);
+    console.log(
+      formatTraceShow(events, {
+        source: target,
+        ok: integrity.ok,
+        reason: integrity.reason,
+        brokenAt: integrity.brokenAt,
+      }),
+    );
+  });
+
+program
+  .command("uninstall")
+  .description(`remove the reins hook for an agent (${HOOK_ADAPTER_NAMES.join(", ")})`)
+  .argument("<adapter>", `agent adapter: ${HOOK_ADAPTER_NAMES.join(" | ")}`)
+  .option("--settings <path>", "agent settings/config file override (where applicable)")
+  .action(async (adapter: string, opts: { settings?: string }) => {
+    if (!(adapter in HOOK_ADAPTERS)) {
+      return failClosed(`unknown adapter "${adapter}" (supported: ${HOOK_ADAPTER_NAMES.join(", ")})`);
+    }
+
+    const removeFromFile = async (filePath: string, event: string, command: string, kind: string) => {
+      if (!existsSync(filePath)) return console.log(`not installed (${kind} config missing)`);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(await readFile(filePath, "utf8") || "{}");
+      } catch {
+        return failClosed(`${filePath} is not valid JSON — not touching it`);
+      }
+      const { settings, changed } = removeHooksEntry(parsed, { event, command });
+      if (!changed) return console.log(`not installed in ${filePath}`);
+      const hooks = settings["hooks"] as Record<string, unknown>;
+      const allEmpty = Object.values(hooks).every((v) => Array.isArray(v) && v.length === 0);
+      if (allEmpty && kind !== "settings") {
+        await rm(filePath);
+        console.log(`removed ${filePath} (no hook entries left)`);
+      } else {
+        await atomicWrite(filePath, JSON.stringify(settings, null, 2) + "\n");
+        console.log(`hook removed from ${filePath}`);
+      }
+    };
+
+    switch (adapter as HookAdapterName) {
+      case "claude": {
+        const settingsPath = opts.settings ?? join(homedir(), ".claude", "settings.json");
+        await removeFromFile(settingsPath, "PreToolUse", REINS_HOOK_COMMAND, "settings");
+        break;
+      }
+      case "gemini": {
+        const settingsPath = opts.settings ?? join(homedir(), ".gemini", "settings.json");
+        await removeFromFile(settingsPath, "BeforeTool", GEMINI_HOOK_COMMAND, "settings");
+        break;
+      }
+      case "grok": {
+        const hooksPath = opts.settings ?? join(homedir(), ".grok", "hooks", "reins.json");
+        await removeFromFile(hooksPath, "PreToolUse", GROK_HOOK_COMMAND, "hooks-file");
+        break;
+      }
+      case "codex": {
+        const hooksPath = opts.settings ?? join(homedir(), ".codex", "hooks.json");
+        await removeFromFile(hooksPath, "PreToolUse", CODEX_HOOK_COMMAND, "hooks-file");
+        console.log("note: `[features] hooks = true` in config.toml left untouched (other hooks may use it)");
+        break;
+      }
+      case "opencode": {
+        const pluginPath = opts.settings ?? join(homedir(), ".config", "opencode", "plugins", "reins.js");
+        if (!existsSync(pluginPath)) return console.log(`not installed (${pluginPath} missing)`);
+        const content = await readFile(pluginPath, "utf8");
+        if (!isGeneratedByReins(content, OPENCODE_PLUGIN_COMMAND)) {
+          console.log(`${pluginPath} is not a reins-generated file — leaving it alone`);
+          break;
+        }
+        await rm(pluginPath);
+        console.log(`removed ${pluginPath}`);
+        break;
+      }
+      case "pi": {
+        const extPath = opts.settings ?? join(homedir(), ".pi", "agent", "extensions", "reins.ts");
+        if (!existsSync(extPath)) return console.log(`not installed (${extPath} missing)`);
+        const content = await readFile(extPath, "utf8");
+        if (!isGeneratedByReins(content, PI_EXTENSION_COMMAND)) {
+          console.log(`${extPath} is not a reins-generated file — leaving it alone`);
+          break;
+        }
+        await rm(extPath);
+        console.log(`removed ${extPath}`);
+        break;
+      }
+    }
+  });
+
+const policy = program.command("policy").description("inspect policies without executing anything");
+
+policy
+  .command("eval")
+  .description("evaluate a command or file path against the policy — nothing is executed")
+  .argument("[command...]", "command to evaluate (or ignored when --file is given)")
+  .option("--tool <name>", "tool name to evaluate as", "Bash")
+  .option("--file <path>", "evaluate a file path against path rules instead")
+  .option("--policy <path>", "policy file override")
+  .action(async (commandParts: string[], opts: { tool: string; file?: string; policy?: string }) => {
+    if (!opts.file && commandParts.length === 0) {
+      return failClosed("nothing to evaluate: pass a command or use --file <path>");
+    }
+    const p = loadPolicy(readFileSync(resolvePolicyPath(opts.policy), "utf8"));
+    const input: Record<string, unknown> = opts.file
+      ? { file_path: opts.file }
+      : { command: commandParts.join(" ") };
+    const result = decide(p, { tool: opts.tool, input });
+    console.log(`decision: ${result.decision}${result.matchedRule ? ` — rule "${result.matchedRule}"` : " (policy default)"}`);
+    console.log(`reason: ${result.reason ?? "—"}`);
+    console.log(`${opts.file ? "path" : "command"}: ${opts.file ?? commandParts.join(" ")}`);
+    process.exit(result.decision === "allow" ? 0 : 2);
   });
 
 program.parseAsync(process.argv).catch((err: unknown) => {

@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is Se
 ## [Unreleased]
 
 ### Added
+- **CLI ergonomics** — `trace show` (human-readable ledger timeline),
+  `policy eval` (dry-run a command or file path against the policy, never
+  executes; exit code mirrors hook semantics), and `uninstall <agent>` for
+  all six adapters (removes only reins entries / marker-verified generated
+  files; repurposed files are left alone)
+- `macos-latest` CI job (the primary dev platform was missing from CI)
 - **Operation snapshots** — `reins snapshot` builds a forensic markdown report per session:
   integrity verdict (tampered traces are flagged, not refused), policy sha256
   fingerprint, full decision timeline, git context of touched files (repo, HEAD,

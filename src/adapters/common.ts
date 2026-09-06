@@ -211,3 +211,37 @@ export function hasHooksEntry(
   const list = (hooks as Record<string, unknown>)[opts.event];
   return Array.isArray(list) && list.some((e) => entryHasCommand(e, opts.command));
 }
+
+/** Pure inverse of mergeHooksEntry: drop the entry whose command matches,
+ *  keep everything else (including foreign groups). Idempotent. */
+export function removeHooksEntry(
+  existing: unknown,
+  opts: { event: string; command: string },
+): { settings: Record<string, unknown>; changed: boolean } {
+  const settings: Record<string, unknown> =
+    typeof existing === "object" && existing !== null
+      ? (structuredClone(existing) as Record<string, unknown>)
+      : {};
+
+  const hooks = settings["hooks"];
+  if (typeof hooks !== "object" || hooks === null) {
+    return { settings, changed: false };
+  }
+  const list = (hooks as Record<string, unknown>)[opts.event];
+  if (!Array.isArray(list)) {
+    return { settings, changed: false };
+  }
+
+  const kept = list.filter((e) => !entryHasCommand(e, opts.command));
+  if (kept.length === list.length) {
+    return { settings, changed: false };
+  }
+  (hooks as Record<string, unknown>)[opts.event] = kept;
+  return { settings, changed: true };
+}
+
+/** true when a generated file's content still carries our marker command —
+ *  used by uninstall to avoid deleting files the user has since repurposed. */
+export function isGeneratedByReins(content: string, command: string): boolean {
+  return content.includes(command);
+}
