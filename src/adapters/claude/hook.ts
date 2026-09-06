@@ -15,11 +15,12 @@ import {
  */
 export async function handlePreToolUse(
   payload: unknown,
-  opts: { policy: Policy; trace: TraceWriter },
+  opts: { policy: Policy; trace: TraceWriter; policyDigest?: string },
 ): Promise<HookOutcome> {
   return runAdapterHook(normalizeSnakeCasePayload(payload), {
     policy: opts.policy,
     trace: opts.trace,
     channel: "claude",
+    policyDigest: opts.policyDigest,
   });
 }

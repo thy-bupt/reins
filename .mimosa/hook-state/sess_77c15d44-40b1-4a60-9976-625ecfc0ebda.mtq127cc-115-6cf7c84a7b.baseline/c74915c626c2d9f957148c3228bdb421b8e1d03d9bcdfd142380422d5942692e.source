@@ -29,7 +29,6 @@ import { formatTraceShow } from "./show.js";
 import { formatDoctorReport, runDoctor, type DoctorOptions } from "./doctor.js";
 import { formatReplayReport, replaySession } from "./replay.js";
 import { buildSnapshotMarkdown, collectGitContext, deriveAgentAndSession, policySha256, type SnapshotData } from "./snapshot.js";
-import { buildEvidenceRecords, toJsonDocument, toNdjson } from "./export.js";
 import {
   BUNDLED_POLICY_PATH,
   reinsHome,
@@ -320,15 +319,10 @@ program
 
     try {
       const payload: unknown = raw.trim() === "" ? null : JSON.parse(raw);
-      const policyPath = resolvePolicyPath(opts.policy);
-      const policyText = readFileSync(policyPath, "utf8");
-      const policy = loadPolicy(policyText);
-      const policyDigest = policySha256(policyText);
-      // sessionIdFrom understands snake_case and camelCase payloads;
-      // sanitizeSessionId keeps the ledger path inside sessions/
+      const policy = loadPolicy(readFileSync(resolvePolicyPath(opts.policy), "utf8"));
       const sessionId = sanitizeSessionId(adapter, sessionIdFrom(payload, adapter));
       const trace = await TraceWriter.open(join(sessionsDir(), `${adapter}-${sessionId}.jsonl`));
-      const outcome = await handler(payload, { policy, trace, policyDigest });
+      const outcome = await handler(payload, { policy, trace });
       if (outcome.stdout) process.stdout.write(outcome.stdout);
       if (outcome.stderr) process.stderr.write(outcome.stderr + "\n");
       process.exit(outcome.exitCode);
@@ -346,18 +340,10 @@ program
   .option("--cwd <dir>", "working directory for the command")
   .action(async (commandParts: string[], opts: { policy?: string; cwd?: string }) => {
     const command = commandParts.join(" ");
-    const policyPath = resolvePolicyPath(opts.policy);
-    const policyText = readFileSync(policyPath, "utf8");
-    const policy = loadPolicy(policyText);
+    const policy = loadPolicy(readFileSync(resolvePolicyPath(opts.policy), "utf8"));
     const trace = await TraceWriter.start(sessionsDir());
     const decision = decide(policy, { tool: "exec", input: { command } });
-    const result = await runGuarded({
-      command,
-      trace,
-      cwd: opts.cwd,
-      decision,
-      policyDigest: policySha256(policyText),
-    });
+    const result = await runGuarded({ command, trace, cwd: opts.cwd, decision });
     if (result.blocked) {
       process.stderr.write(
         `[reins] blocked by rule "${decision.matchedRule ?? "default"}": ${decision.reason ?? "policy denied this action"}\n`,
@@ -410,15 +396,13 @@ program
   .option("--home <dir>", "reins home", reinsHome())
   .option("--settings <path>", "Claude Code settings file", join(homedir(), ".claude", "settings.json"))
   .option("--agent <name>", "treat this adapter as the primary one (claude, gemini, grok, codex, opencode, pi)")
-  .option("--all", "check every adapter; absence is reported but never fails")
   .option("--no-path-check", "skip checking whether reins is on PATH")
-  .action(async (opts: { home: string; settings: string; pathCheck: boolean; agent?: string; all?: boolean }) => {
+  .action(async (opts: { home: string; settings: string; pathCheck: boolean; agent?: string }) => {
     const report = await runDoctor({
       home: opts.home,
       settingsPath: opts.settings,
       checkPath: opts.pathCheck,
       primaryAgent: opts.agent as DoctorOptions["primaryAgent"],
-      all: opts.all,
       agentPaths: {
         gemini: join(homedir(), ".gemini", "settings.json"),
         grok: join(homedir(), ".grok", "hooks", "reins.json"),
@@ -668,37 +652,6 @@ program
   .description("run the read-only reins MCP server (stdio) — enforcement never lives here")
   .action(async () => {
     await runMcpServer();
-  });
-
-trace
-  .command("export")
-  .description("export a session ledger as schema-v1 evidence (ndjson or json)")
-  .argument("[file]", "trace file (default: newest session)")
-  .option("--format <fmt>", "output format: ndjson | json", "ndjson")
-  .option("--out <path>", "output file (default: stdout)")
-  .action(async (file: string | undefined, opts: { format: string; out?: string }) => {
-    const target = file ?? (await newestSessionFile());
-    if (!target) return failClosed("no session traces found");
-    const integrity = await verifyTrace(target);
-    const events = await readTrace(target);
-    const { agent, sessionId } = deriveAgentAndSession(target);
-    const meta = {
-      sourceFile: target,
-      agent,
-      sessionId,
-      integrity,
-      generatedBy: `reins/${VERSION}`,
-    };
-    const records = buildEvidenceRecords(events, meta);
-    const payload =
-      opts.format === "json" ? toJsonDocument(records, meta) : toNdjson(records);
-    if (opts.out) {
-      await writeFile(opts.out, payload, "utf8");
-      console.log(`evidence exported: ${opts.out} (${records.length} events, ${payload.length} bytes)`);
-    } else {
-      process.stdout.write(payload);
-    }
-    if (!integrity.ok) process.exitCode = 1;
   });
 
 program.parseAsync(process.argv).catch((err: unknown) => {

@@ -51,12 +51,6 @@ export interface TraceEvent {
   matchedRule?: string;
   result?: TraceResult;
   exitCode?: number;
-  /** sha256 of the policy file this decision was made under — lets replay
-   *  and audits bind every verdict to the exact policy version. */
-  policyDigest?: string;
-  /** set when this event is the first observed under a different policy
-   *  digest than the rest of the session (policy changed mid-session). */
-  policyDrift?: boolean;
   prevHash: string;
   hash: string;
 }
@@ -74,8 +68,6 @@ function hashEvent(event: Omit<TraceEvent, "hash">): string {
     matchedRule: event.matchedRule,
     result: event.result,
     exitCode: event.exitCode,
-    policyDigest: event.policyDigest,
-    policyDrift: event.policyDrift,
     prevHash: event.prevHash,
   });
   return createHash("sha256").update(canonical).digest("hex");
@@ -129,13 +121,6 @@ export class TraceWriter {
       const seq = last ? last.seq + 1 : 0;
       const prevHash = last ? last.hash : GENESIS_HASH;
 
-      // policy drift: this decision was made under a different policy than
-      // the previous event in the same session — recorded on the event itself
-      const policyDrift =
-        entry.policyDigest !== undefined &&
-        last?.policyDigest !== undefined &&
-        last.policyDigest !== entry.policyDigest;
-
       const event: Omit<TraceEvent, "hash"> = {
         seq,
         ts: new Date().toISOString(),
@@ -146,8 +131,6 @@ export class TraceWriter {
         matchedRule: entry.matchedRule,
         result: entry.result,
         exitCode: entry.exitCode,
-        policyDigest: entry.policyDigest,
-        policyDrift: policyDrift || undefined,
         prevHash,
       };
       const full: TraceEvent = { ...event, hash: hashEvent(event) };

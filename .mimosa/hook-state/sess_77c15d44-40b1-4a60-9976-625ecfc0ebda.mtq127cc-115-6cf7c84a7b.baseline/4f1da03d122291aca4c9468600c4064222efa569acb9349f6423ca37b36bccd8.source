@@ -7,7 +7,7 @@ import { hasGeminiHook } from "../adapters/gemini/installer.js";
 import { hasGrokHook } from "../adapters/grok/installer.js";
 import { hasCodexHook, configTomlHasHooksEnabled } from "../adapters/codex/installer.js";
 import { loadPolicy, PolicyError } from "../core/policy.js";
-import { readTrace, verifyTrace } from "../core/trace.js";
+import { verifyTrace } from "../core/trace.js";
 
 export interface CheckResult {
   name: string;
@@ -40,8 +40,6 @@ export interface DoctorOptions {
   /** treat this adapter as the primary one: its absence is a fail, and other
    *  agents are not flagged. Defaults to claude. */
   primaryAgent?: "claude" | "gemini" | "grok" | "codex" | "opencode" | "pi";
-  /** check every adapter without failing on any absence */
-  all?: boolean;
 }
 
 async function readTextIfExists(filePath: string | undefined): Promise<string | null> {
@@ -83,13 +81,12 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
 
   // 2. agent hook installed (fail-open protection) — only for the primary
   //    adapter; use --agent to make a different adapter the primary one
-  const primary = opts.primaryAgent ?? (opts.all ? undefined : "claude");
-  if (primary === "claude" || opts.all) {
-    const claudeSeverity: "ok" | "warn" | "fail" = primary === "claude" ? "fail" : "warn";
+  const primary = opts.primaryAgent ?? "claude";
+  if (primary === "claude") {
     if (!existsSync(opts.settingsPath)) {
       checks.push({
         name: "claude-hook",
-        status: claudeSeverity,
+        status: "fail",
         detail: `${opts.settingsPath} not found — the hook is NOT installed, so your agent runs fail-open`,
       });
     } else {
@@ -100,7 +97,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
         } else {
           checks.push({
             name: "claude-hook",
-            status: claudeSeverity,
+            status: "fail",
             detail: `no reins entry in ${opts.settingsPath} — agents run fail-open`,
           });
         }
@@ -179,39 +176,23 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
     checks.push({ name: "sessions", status: "ok", detail: "no sessions yet (created on first use)" });
   }
 
-  // 5. trace integrity + policy drift
+  // 5. trace integrity
   if (existsSync(sessionsDir)) {
     const files = (await readdir(sessionsDir)).filter((f) => f.endsWith(".jsonl"));
     const broken: string[] = [];
-    const drifted: string[] = [];
     for (const f of files) {
       const filePath = join(sessionsDir, f);
       const result = await verifyTrace(filePath);
-      if (!result.ok) {
-        broken.push(`${f}: ${result.reason ?? "integrity failure"} at event ${result.brokenAt}`);
-        continue;
-      }
-      // policy drift: more than one distinct policy digest inside one session
-      try {
-        const events = await readTrace(filePath);
-        const digests = new Set(
-          events.map((e) => e.policyDigest).filter((d: unknown): d is string => typeof d === "string"),
-        );
-        if (digests.size > 1) drifted.push(`${f}: ${digests.size} distinct policy digests`);
-      } catch {
-        broken.push(`${f}: unreadable`);
-      }
+      if (!result.ok) broken.push(`${f}: ${result.reason ?? "integrity failure"} at event ${result.brokenAt}`);
     }
-    const notes = [
-      broken.length > 0 ? `${broken.length} tampered/corrupt trace(s): ${broken.join("; ")}` : null,
-      drifted.length > 0 ? `policy drift inside ${drifted.length} session(s): ${drifted.join("; ")}` : null,
-    ].filter((n): n is string => n !== null);
-    if (notes.length === 0) {
+    if (broken.length === 0) {
       checks.push({ name: "traces", status: "ok", detail: `${files.length} trace(s) verified, hash chains intact` });
-    } else if (broken.length > 0) {
-      checks.push({ name: "traces", status: "fail", detail: notes.join(" · ") });
     } else {
-      checks.push({ name: "traces", status: "warn", detail: notes.join(" · ") });
+      checks.push({
+        name: "traces",
+        status: "fail",
+        detail: `${broken.length} tampered/corrupt trace(s): ${broken.join("; ")}`,
+      });
     }
   } else {
     checks.push({ name: "traces", status: "ok", detail: "nothing to verify yet" });

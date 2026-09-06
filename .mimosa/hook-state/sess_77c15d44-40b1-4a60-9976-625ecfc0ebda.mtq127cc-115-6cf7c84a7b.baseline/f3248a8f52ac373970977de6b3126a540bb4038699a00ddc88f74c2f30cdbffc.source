@@ -14,12 +14,11 @@ import {
  */
 export async function handleToolCall(
   payload: unknown,
-  opts: { policy: Policy; trace: TraceWriter; policyDigest?: string },
+  opts: { policy: Policy; trace: TraceWriter },
 ): Promise<HookOutcome> {
   return runAdapterHook(normalizeLoosePayload(payload), {
     policy: opts.policy,
     trace: opts.trace,
     channel: "pi",
-    policyDigest: opts.policyDigest,
   });
 }

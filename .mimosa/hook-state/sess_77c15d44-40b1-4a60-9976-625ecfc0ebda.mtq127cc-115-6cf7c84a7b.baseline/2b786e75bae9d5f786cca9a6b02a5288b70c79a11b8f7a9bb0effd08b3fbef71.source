@@ -35,7 +35,7 @@ const ENCODINGS: Record<HookChannel, ChannelEncoding> = {
  */
 export async function runAdapterHook(
   event: ToolEvent | null,
-  opts: { policy: Policy; trace: TraceWriter; channel: HookChannel; policyDigest?: string },
+  opts: { policy: Policy; trace: TraceWriter; channel: HookChannel },
 ): Promise<HookOutcome> {
   if (event === null) {
     await opts.trace.append({
@@ -45,7 +45,6 @@ export async function runAdapterHook(
       reason: FAIL_CLOSED_STDERR,
       result: "blocked",
       exitCode: 2,
-      policyDigest: opts.policyDigest,
     });
     return { exitCode: 2, stdout: "", stderr: FAIL_CLOSED_STDERR };
   }
@@ -60,7 +59,6 @@ export async function runAdapterHook(
     matchedRule: result.matchedRule,
     result: result.decision === "deny" ? "blocked" : undefined,
     exitCode: result.decision === "deny" ? 2 : undefined,
-    policyDigest: opts.policyDigest,
   });
 
   const channel = ENCODINGS[opts.channel];

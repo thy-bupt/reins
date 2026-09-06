@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is Se
 ## [Unreleased]
 
 ### Added
+- **Policy digest anchoring** — every ledger event records the sha256 of the
+  policy it was decided under; in-session policy changes are flagged as
+  drift on the event and surfaced by `doctor`
+- **`trace export`** — schema `reins.evidence/v1` (ndjson/json) with
+  integrity_status, ready for CI artifacts and SIEM ingestion
+- **`doctor --all`** — check every adapter without failing on absence
+### Fixed
+- grok adapter session naming regression (camelCase session ids)
+### Added
 - **Security hardening from independent review** — interpreter recursion
   (`bash -c "…"`), control-flow keywords, `${IFS}` normalization, command
   substitution (`$(…)`, backticks) and wrapper flag/value handling now all

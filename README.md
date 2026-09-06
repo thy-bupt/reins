@@ -1,6 +1,14 @@
 # reins
 
-**Hold the reins of your AI coding agent.** A fail-closed safety layer: declarative policy engine, tamper-evident trace, session replay. Agent-agnostic, local-first, one npm install.
+**Hold the reins of your AI coding agent.**
+
+reins is a local, deterministic **verifiable execution evidence layer** for AI
+coding agents: deterministic policy decisions *before* a tool call runs, a
+tamper-evident event chain *after*, policy replay, and git-linked incident
+forensics. It sits *above* sandboxes (Claude Sandbox, OpenShell, bubblewrap) —
+they constrain what the agent can touch; reins proves what it asked for, under
+which policy, and whether the record itself can be trusted. Agent-agnostic,
+local-first, one npm install.
 
 ```bash
 npm i -g reins
@@ -211,14 +219,18 @@ The "make agents safer" niche got crowded in 2025–2026, and that's good. Here 
 | Decision ledger | every decision, JSONL | denial log | — | — | full traces (SQLite) |
 | Tamper evidence | hash chain, refuses to append to a broken one | — | — | — | — |
 | Replay under a new policy | ✅ policy-diff report | — | — | — | debug-focused replay/fork |
-| Fail-closed core | ✅ by design | ❌ fail-open in Standard mode (Strict/Paranoid flips it) | n/a | sandboxed | — |
-| Agent coverage | Claude Code adapter + generic `exec` | **13 CLIs** | Claude Code only | agents it hosts | tracing lib, agent-agnostic |
+| Fail-closed core | ✅ by design (errors/tamper block; unmatched follows policy default) | Standard mode is allow-leaning; Strict/Paranoid are conservative | n/a | sandboxed | — |
+| Agent coverage | **6 adapters + generic `exec`** | **13 CLIs** | Claude Code only | agents it hosts | tracing lib, agent-agnostic |
 | OS-level enforcement | ❌ (heuristic parser) | ❌ (same approach) | ✅ | ✅ (Landlock) | — |
 | Weight | npm, no daemon, ~40 ms/call | npm, no daemon | built-in | Rust + containers | npm |
 
 **Where the others lead:** cc-safety-net has far broader agent coverage, a GUI, secret-access blocking that spans read tools, and a real community — for pure "stop the dangerous command" on many agents, it's the established choice. OpenShell and native sandboxing enforce at the kernel level, which no userspace parser can match. agent-replay is the better debugging UX today.
 
-**Where reins is different:** it's the only one of these whose ledger is *verifiable* (hash-chained, refuses to continue a tampered file), the only one that pairs a policy gate with *replay under a candidate policy*, and the only one whose core answer to "what if the guard breaks" is *block*, not *allow*. Those three properties compose into something none of the others offer end-to-end: **evidence you can trust about what an agent tried to do** — which is what you need for incident review, compliance, and deciding whether to tighten a policy. It also runs alongside all of the above rather than instead of them: sandbox where you can, guard where you must, ledger either way.
+**Where reins is different:** it's the only one of these whose ledger is *verifiable* (hash-chained, refuses to continue a tampered file), the one that pairs a policy gate with *replay under a candidate policy* and
+binds every verdict to a policy digest (with in-session drift detection).
+cc-safety-net's Strict/Paranoid presets close much of the fail-closed gap —
+reins' differentiation is the **verifiable ledger + replay + evidence export**,
+not a claim of being the only fail-closed hook. Those three properties compose into something none of the others offer end-to-end: **evidence you can trust about what an agent tried to do** — which is what you need for incident review, compliance, and deciding whether to tighten a policy. It also runs alongside all of the above rather than instead of them: sandbox where you can, guard where you must, ledger either way.
 
 ## Roadmap
 

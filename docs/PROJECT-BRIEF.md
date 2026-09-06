@@ -3,6 +3,15 @@
 > 评估入口建议：先读本文件 → `README.md`（功能与设计）→ `docs/evidence-v0.2.md` 与
 > `docs/evidence-agent.md`（实验证据）→ 复现命令见文末"评估者快速上手"。
 
+## 0. 本轮评审响应（2026-09-07）
+
+独立评审（Codex）两轮意见已处理：第一轮 4 个发布阻断项（shell 绕过、账本并发、
+session_id 穿越、打包/隐私/权限）全部修复并有回归测试；第二轮定位建议已采纳——
+reins 重新表述为**可验证执行证据层**，并新增：每个事件携带 policyDigest（会话内
+策略漂移自动标记，doctor 可检出）、`trace export`（schema `reins.evidence/v1`，
+ndjson/json，含 integrity_status）、`doctor --all`。SARIF/PR 评论/OTel 导出、
+policy 签名、GitHub Action 见路线图。
+
 ## 1. 项目是什么
 
 **reins**（npm 名已核验可用——尚未发布，`registry` 上 E404 即未占用的证明）是一个给 AI 编码 agent 用的 **fail-closed 安全层**：
@@ -25,6 +34,8 @@
 | 防篡改账本 | `trace list/verify/show` | JSONL + SHA-256 哈希链；断链拒写（fail-closed） |
 | 政策复盘 | `replay --policy <p>` | 用候选策略重演历史判决（绝不执行） |
 | 取证快照 | `snapshot --with-diffs` | Markdown 卷宗：完整性 + 时间线 + git 关联 + 恢复指引 |
+| 证据导出 | `trace export` | schema `reins.evidence/v1`（ndjson/json），含 policy_digest 与 integrity_status |
+| 策略指纹 | 每个事件 | policyDigest 锚定判决所用的策略版本；会话内漂移自动标记并被 doctor 检出 |
 | 体检 | `doctor` | 策略 / 六 agent 安装状态 / 账本完整性 / PATH |
 | MCP（只读） | `mcp` | `check_command` / `recent_decisions` / `policy_summary` / `stats` |
 | Skills | `init skills` | `reins-selfcheck`（被拦后自救）/ `reins-incident`（取证工作流） |
@@ -43,7 +54,7 @@ src/cli/       人类管理面（main / doctor / replay / snapshot / show）
 
 ## 4. 质量状态
 
-- **225 个测试全绿**（macOS 本机），含：绕过攻击测试集（`rm -fr`/`sudo`/`find -exec`/
+- **225 个测试全绿（v0.2.0）**（macOS 本机），含：绕过攻击测试集（`rm -fr`/`sudo`/`find -exec`/
   多行/管道等变体）、误报防御（`echo "rm -rf"` 必须放行）、六 agent 矩阵 e2e（真实
   dist 二进制走 stdin）、MCP 协议级 e2e（SDK 客户端全握手）
 - CI：ubuntu (node 20/22/24) + windows-latest + macos-latest
