@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { decide, type ToolEvent } from "../core/decider.js";
 import type { Policy } from "../core/policy.js";
 import { TraceWriter } from "../core/trace.js";
@@ -52,7 +53,7 @@ export async function runAdapterHook(
 
   await opts.trace.append({
     tool: event.tool,
-    input: event.input,
+    input: sanitizeTraceInput(event.input),
     decision: result.decision,
     reason: result.reason,
     matchedRule: result.matchedRule,
@@ -150,6 +151,42 @@ export function sessionIdFrom(payload: unknown, fallbackPrefix: string): string 
     }
   }
   return `${fallbackPrefix}-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+}
+
+/** The ledger filename derives from the agent-supplied session id — without a
+ *  whitelist, `session_id: "x/../../escape"` writes outside sessions/.
+ *  Unsafe ids are replaced by a hash; the raw id never touches the path. */
+export function sanitizeSessionId(adapter: string, sessionId: string): string {
+  if (/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(sessionId)) return sessionId;
+  return "h-" + createHash("sha256").update(`${adapter}:${sessionId}`).digest("hex").slice(0, 32);
+}
+
+/** Privacy whitelist for ledger inputs: record what was ATTEMPTED, not the
+ *  payloads. Command tools keep command/cwd; file tools keep the path plus a
+ *  content hash and length — never the content itself. Unknown shapes record
+ *  nothing rather than everything. */
+export function sanitizeTraceInput(input: unknown): unknown {
+  if (typeof input !== "object" || input === null) return input ?? null;
+  const rec = input as Record<string, unknown>;
+
+  if (typeof rec["command"] === "string" && rec["command"] !== "") {
+    const out: Record<string, unknown> = { command: rec["command"] };
+    if (typeof rec["cwd"] === "string" && rec["cwd"] !== "") out["cwd"] = rec["cwd"];
+    return out;
+  }
+
+  const filePath = rec["file_path"] ?? rec["notebook_path"] ?? rec["path"] ?? rec["filePath"];
+  if (typeof filePath === "string" && filePath !== "") {
+    const out: Record<string, unknown> = { file_path: filePath };
+    const content = rec["content"];
+    if (typeof content === "string" && content.length > 0) {
+      out["contentSha256"] = createHash("sha256").update(content).digest("hex");
+      out["contentLength"] = content.length;
+    }
+    return out;
+  }
+
+  return {};
 }
 
 interface HookCommand {

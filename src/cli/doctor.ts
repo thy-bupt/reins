@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -37,6 +37,9 @@ export interface DoctorOptions {
   /** verify the `reins` binary resolves on PATH (skippable in tests) */
   checkPath?: boolean;
   agentPaths?: AgentPaths;
+  /** treat this adapter as the primary one: its absence is a fail, and other
+   *  agents are not flagged. Defaults to claude. */
+  primaryAgent?: "claude" | "gemini" | "grok" | "codex" | "opencode" | "pi";
 }
 
 async function readTextIfExists(filePath: string | undefined): Promise<string | null> {
@@ -58,10 +61,14 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
   } else {
     try {
       const policy = loadPolicy(await readFile(policyPath, "utf8"));
+      const st = statSync(policyPath);
+      const worldReadable = (st.mode & 0o077) !== 0;
       checks.push({
         name: "policy",
-        status: "ok",
-        detail: `${policy.rules.length} rules, default=${policy.default} (${policyPath})`,
+        status: worldReadable ? "warn" : "ok",
+        detail:
+          `${policy.rules.length} rules, default=${policy.default} (${policyPath})` +
+          (worldReadable ? " — mode is group/other-readable; consider chmod 600" : ""),
       });
     } catch (err) {
       checks.push({
@@ -72,50 +79,56 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
     }
   }
 
-  // 2. agent hook installed (fail-open protection)
-  if (!existsSync(opts.settingsPath)) {
-    checks.push({
-      name: "claude-hook",
-      status: "fail",
-      detail: `${opts.settingsPath} not found — the hook is NOT installed, so your agent runs fail-open`,
-    });
-  } else {
-    try {
-      const settings: unknown = JSON.parse(await readFile(opts.settingsPath, "utf8"));
-      if (hasReinsHook(settings)) {
-        checks.push({ name: "claude-hook", status: "ok", detail: `installed in ${opts.settingsPath}` });
-      } else {
-        checks.push({
-          name: "claude-hook",
-          status: "fail",
-          detail: `no reins entry in ${opts.settingsPath} — agents run fail-open`,
-        });
-      }
-    } catch (err) {
+  // 2. agent hook installed (fail-open protection) — only for the primary
+  //    adapter; use --agent to make a different adapter the primary one
+  const primary = opts.primaryAgent ?? "claude";
+  if (primary === "claude") {
+    if (!existsSync(opts.settingsPath)) {
       checks.push({
         name: "claude-hook",
         status: "fail",
-        detail: `${opts.settingsPath} is not valid JSON: ${String(err)}`,
+        detail: `${opts.settingsPath} not found — the hook is NOT installed, so your agent runs fail-open`,
       });
+    } else {
+      try {
+        const settings: unknown = JSON.parse(await readFile(opts.settingsPath, "utf8"));
+        if (hasReinsHook(settings)) {
+          checks.push({ name: "claude-hook", status: "ok", detail: `installed in ${opts.settingsPath}` });
+        } else {
+          checks.push({
+            name: "claude-hook",
+            status: "fail",
+            detail: `no reins entry in ${opts.settingsPath} — agents run fail-open`,
+          });
+        }
+      } catch (err) {
+        checks.push({
+          name: "claude-hook",
+          status: "fail",
+          detail: `${opts.settingsPath} is not valid JSON: ${String(err)}`,
+        });
+      }
     }
   }
 
-  // 3. other agent adapters (optional — warn, never fail, on absence)
+  // 3. other agent adapters — absence is a warn for optional agents, but a
+  //    fail for the one selected via --agent
   const agents = opts.agentPaths ?? {};
   const hint = (name: string) => `run \`reins init ${name}\` to install`;
+  const severityFor = (name: string): "ok" | "warn" | "fail" => (primary === name ? "fail" : "warn");
 
   const geminiSettings = await readTextIfExists(agents.gemini);
   if (geminiSettings !== null && hasGeminiHook(geminiSettings)) {
     checks.push({ name: "agent:gemini", status: "ok", detail: `installed (${agents.gemini})` });
   } else if (agents.gemini) {
-    checks.push({ name: "agent:gemini", status: "warn", detail: `not installed — ${hint("gemini")}` });
+    checks.push({ name: "agent:gemini", status: severityFor("gemini"), detail: `not installed — ${hint("gemini")}` });
   }
 
   const grokHooks = await readTextIfExists(agents.grok);
   if (grokHooks !== null && hasGrokHook(grokHooks)) {
     checks.push({ name: "agent:grok", status: "ok", detail: `installed (${agents.grok})` });
   } else if (agents.grok) {
-    checks.push({ name: "agent:grok", status: "warn", detail: `not installed — ${hint("grok")}` });
+    checks.push({ name: "agent:grok", status: severityFor("grok"), detail: `not installed — ${hint("grok")}` });
   }
 
   const codexHooks = await readTextIfExists(agents.codexHooks);
@@ -126,11 +139,11 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
     if (hooksOk && featureOk) {
       checks.push({ name: "agent:codex", status: "ok", detail: `installed (${agents.codexHooks})` });
     } else if (!hooksOk) {
-      checks.push({ name: "agent:codex", status: "warn", detail: `not installed — ${hint("codex")}` });
+      checks.push({ name: "agent:codex", status: severityFor("codex"), detail: `not installed — ${hint("codex")}` });
     } else {
       checks.push({
         name: "agent:codex",
-        status: "warn",
+        status: severityFor("codex"),
         detail: "hooks.json present but the `[features] hooks = true` feature flag is missing in config.toml — hooks will not run",
       });
     }
@@ -141,7 +154,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
     if (plugin !== null && plugin.includes("tool.execute.before")) {
       checks.push({ name: "agent:opencode", status: "ok", detail: `installed (${agents.opencode})` });
     } else {
-      checks.push({ name: "agent:opencode", status: "warn", detail: `not installed — ${hint("opencode")}` });
+      checks.push({ name: "agent:opencode", status: severityFor("opencode"), detail: `not installed — ${hint("opencode")}` });
     }
   }
 
@@ -150,7 +163,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
     if (ext !== null && ext.includes("tool_call")) {
       checks.push({ name: "agent:pi", status: "ok", detail: `installed (${agents.pi})` });
     } else {
-      checks.push({ name: "agent:pi", status: "warn", detail: `not installed — ${hint("pi")}` });
+      checks.push({ name: "agent:pi", status: severityFor("pi"), detail: `not installed — ${hint("pi")}` });
     }
   }
 

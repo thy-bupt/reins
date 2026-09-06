@@ -2,7 +2,9 @@ import { basename } from "node:path";
 import { parse as shellParse } from "shell-quote";
 import picomatch from "picomatch";
 
-/** tokens that wrap a real command without changing what runs (best effort). */
+/** tokens that wrap a real command without changing what runs (best effort):
+ *  classic wrappers plus POSIX control-flow keywords so `if true; then rm …`,
+ *  `while …; do rm …; done` and `{ rm …; }` still resolve to the real program. */
 const WRAPPER_TOKENS: ReadonlySet<string> = new Set([
   "sudo",
   "nohup",
@@ -13,6 +15,45 @@ const WRAPPER_TOKENS: ReadonlySet<string> = new Set([
   "stdbuf",
   "env",
   "xargs",
+  // control flow
+  "if",
+  "then",
+  "else",
+  "elif",
+  "fi",
+  "while",
+  "until",
+  "for",
+  "do",
+  "done",
+  "{",
+  "}",
+  "!",
+]);
+
+/** flags of wrapper tokens that take a value: `sudo -u root rm` must find
+ *  past "root" — the flag-consumes-next-token heuristic. */
+const WRAPPER_VALUE_FLAGS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["sudo", new Set(["u", "g", "p", "C", "h", "k", "T"])],
+  ["env", new Set(["u"])],
+  ["nice", new Set(["n", "d", "s"])],
+  ["xargs", new Set(["I", "J", "L", "P", "s"])],
+  ["command", new Set(["p", "v"])],
+  ["stdbuf", new Set(["o", "e", "i"])],
+  ["exec", new Set(["a", "c"])],
+]);
+
+/** programs that execute their -c/-Command argument as a shell script. */
+export const SHELL_INTERPRETERS: ReadonlySet<string> = new Set([
+  "bash",
+  "sh",
+  "zsh",
+  "dash",
+  "ksh",
+  "fish",
+  "cmd",
+  "powershell",
+  "pwsh",
 ]);
 
 /** prefixes that introduce an embedded command argument (e.g. find -exec rm ...). */
@@ -61,20 +102,38 @@ export interface ProgramMatch {
   rest: string[];
 }
 
-/** candidate program positions in a segment: argv[0] (skipping wrappers and
- *  env assignments) plus tokens introduced by an exec context (find -exec rm). */
+/** candidate program positions in a segment: argv[0] (skipping wrappers,
+ *  their value-taking flags, bare flags and env assignments) plus tokens
+ *  introduced by an exec context (find -exec rm). */
 export function findProgramCandidates(argv: string[]): ProgramMatch[] {
   const expanded = argv.flatMap(expandFlags);
   const matches: ProgramMatch[] = [];
 
   let firstReal = 0;
+  let lastWrapper: string | null = null;
+  let skipNext = false;
   while (firstReal < expanded.length) {
     const t = expanded[firstReal]!;
-    if (WRAPPER_TOKENS.has(t) || /^[\w-]+=/.test(t)) {
+    if (skipNext) {
+      skipNext = false;
       firstReal += 1;
-    } else {
-      break;
+      continue;
     }
+    if (WRAPPER_TOKENS.has(t)) {
+      lastWrapper = t;
+      firstReal += 1;
+      continue;
+    }
+    if (/^[\w-]+=/.test(t) || t === "--" || t.startsWith("-")) {
+      // a value-taking wrapper flag consumes the following token
+      if (lastWrapper && t.startsWith("-") && !t.startsWith("--")) {
+        const base = t.replace(/^-+/, "");
+        if (WRAPPER_VALUE_FLAGS.get(lastWrapper)?.has(base)) skipNext = true;
+      }
+      firstReal += 1;
+      continue;
+    }
+    break;
   }
   if (firstReal < expanded.length) {
     matches.push({
@@ -93,6 +152,36 @@ export function findProgramCandidates(argv: string[]): ProgramMatch[] {
     }
   }
   return matches;
+}
+
+/** Extract commands that will run indirectly: `$(…)`, backticks, and the
+ *  script text of `bash -c "…"`-style interpreter invocations. Returns the
+ *  inner command strings for (recursive) policy evaluation. */
+export function deriveInnerCommands(raw: string, depth: number): string[] {
+  if (depth <= 0) return [];
+  const out: string[] = [];
+
+  const subst = /\$\(([^()]*)\)|`([^`]*)`/g;
+  for (const m of raw.matchAll(subst)) {
+    const inner = m[1] ?? m[2];
+    if (inner && inner.trim() !== "") {
+      out.push(inner);
+      out.push(...deriveInnerCommands(inner, depth - 1));
+    }
+  }
+
+  for (const seg of parseSegments(raw)) {
+    for (const cand of findProgramCandidates(seg)) {
+      if (!SHELL_INTERPRETERS.has(cand.program)) continue;
+      const ci = cand.rest.findIndex((t) => t.toLowerCase() === "-c" || t.toLowerCase() === "-command");
+      const script = ci !== -1 ? cand.rest[ci + 1] : undefined;
+      if (script && script.trim() !== "") {
+        out.push(script);
+        out.push(...deriveInnerCommands(script, depth - 1));
+      }
+    }
+  }
+  return out;
 }
 
 const regexCache = new Map<string, RegExp>();

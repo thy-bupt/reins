@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is Se
 ## [Unreleased]
 
 ### Added
+- **Security hardening from independent review** — interpreter recursion
+  (`bash -c "…"`), control-flow keywords, `${IFS}` normalization, command
+  substitution (`$(…)`, backticks) and wrapper flag/value handling now all
+  evaluated; cross-process ledger lock (24-concurrent-hook e2e); session_id
+  whitelist + hash fallback (path traversal closed); ledger input whitelist
+  (content stored as sha256, never in plaintext); sessions/trace/policy
+  created 0700/0600; atomic writes preserve file modes; installers refuse to
+  overwrite non-reins files; MCP entry ownership checks; `--agent` for
+  doctor; bypass corpus regression tests from the audit
 - **MCP server** — `reins mcp` (stdio) exposes read-only tools over the core:
   `check_command`, `recent_decisions`, `policy_summary`, `stats`; registered
   into Claude Code with `reins init mcp`. New dependency:

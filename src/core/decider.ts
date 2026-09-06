@@ -1,4 +1,4 @@
-import { expandFlags, compilePattern, findProgramCandidates, matchesPathGlob, parseSegments } from "./matchers.js";
+import { compilePattern, deriveInnerCommands, expandFlags, findProgramCandidates, matchesPathGlob, parseSegments } from "./matchers.js";
 import type { CommandRule, Policy, PolicyAction, Rule } from "./policy.js";
 import type { Decision } from "./trace.js";
 
@@ -19,13 +19,24 @@ function toolsAllow(rule: Rule, tool: string): boolean {
 }
 
 function decideCommand(policy: Policy, tool: string, raw: string): DecisionResult {
-  const segments = parseSegments(raw);
+  // ${IFS} is the classic obfuscation for whitespace; normalize it so
+  // `rm -r${IFS}-f` parses like `rm -r -f`
+  const normalized = raw.replace(/\$\{IFS\}/g, " ");
+  // evaluate the literal command AND everything that runs indirectly:
+  // $(…), backticks, and bash/sh/zsh -c "…" script bodies
+  const segments = [...parseSegments(normalized)];
+  for (const inner of deriveInnerCommands(normalized, 2)) {
+    segments.push(...parseSegments(inner));
+  }
   for (const rule of policy.rules) {
     if (rule.kind !== "command" || !toolsAllow(rule, tool)) continue;
     const cr = rule as CommandRule;
 
     if (cr.pattern !== undefined) {
-      if (compilePattern(cr.pattern).test(raw)) {
+      // patterns match the raw string AND every derived inner command
+      const pattern = cr.pattern;
+      const candidates = [normalized, ...segments.map((seg) => seg.join(" "))];
+      if (candidates.some((c) => compilePattern(pattern).test(c))) {
         return { decision: cr.action, matchedRule: cr.id, reason: cr.reason };
       }
       continue;

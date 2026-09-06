@@ -5,7 +5,7 @@
 
 ## 1. 项目是什么
 
-**reins**（npm 名，已核验可用）是一个给 AI 编码 agent 用的 **fail-closed 安全层**：
+**reins**（npm 名已核验可用——尚未发布，`registry` 上 E404 即未占用的证明）是一个给 AI 编码 agent 用的 **fail-closed 安全层**：
 
 ```text
 拦截（hooks，事前）  →  账本（防篡改，事后）  →  复盘（replay，策略模拟）  →  快照（snapshot，取证+复原）
@@ -43,18 +43,23 @@ src/cli/       人类管理面（main / doctor / replay / snapshot / show）
 
 ## 4. 质量状态
 
-- **185 个测试全绿**（macOS 本机），含：绕过攻击测试集（`rm -fr`/`sudo`/`find -exec`/
+- **225 个测试全绿**（macOS 本机），含：绕过攻击测试集（`rm -fr`/`sudo`/`find -exec`/
   多行/管道等变体）、误报防御（`echo "rm -rf"` 必须放行）、六 agent 矩阵 e2e（真实
   dist 二进制走 stdin）、MCP 协议级 e2e（SDK 客户端全握手）
 - CI：ubuntu (node 20/22/24) + windows-latest + macos-latest
 - 平台实测：macOS ✅ 全量 · Windows ✅ 真机 154/154（v0.2 新增项待复验）· Linux 覆盖于 CI
 - 真实 agent 实测：Claude Code 2.1.263 headless，真实 `rm -rf` 被拦、MCP 工具被 agent
   亲自调用、agent 幻觉被账本揭穿（`docs/evidence-agent.md`）
+- 独立安全评审（Codex）发现的 4 个发布阻断项已修复并有回归测试：
+  shell 间接执行绕过（`bash -c`/控制流/`${IFS}`/`$(...)`/wrapper 旗标）、
+  并发账本哈希链损坏（跨进程文件锁 + 24 并发 e2e）、session_id 路径穿越
+  （白名单 + 哈希兜底）、trace 隐私（输入白名单，正文只存 sha256）
 - 真实仓库验收：expressjs/express clone 上 8 项全过（`docs/evidence-v0.2.md`）
 
 ## 5. 依赖与体积
 
-- 运行时依赖 5 个：commander / yaml / picomatch / shell-quote / @modelcontextprotocol/sdk
+- 运行时依赖 6 个：commander / yaml / picomatch / shell-quote / zod / @modelcontextprotocol/sdk
+- 版本 0.2.0；`prepack` 钩子保证 npm tarball 一定包含 dist（CI 有 clean-package 冒烟）
 - hook 单次决策 ~40ms（冷 Node 进程，含启动/策略加载/匹配/记账）
 - 安装：`npm i -g reins`（或 `npx reins@latest`）
 

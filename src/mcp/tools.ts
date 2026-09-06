@@ -62,37 +62,49 @@ export function createToolHandlers(ctx: McpContext) {
       };
     },
 
-    /** Recent decisions across the newest session ledgers. */
+    /** Recent decisions across the newest session ledgers. Corrupt or
+     *  tampered ledgers are skipped and reported, never silently mixed in. */
     async recent_decisions(args: { limit?: number; verdict?: "allow" | "deny" | "ask" }) {
       const limit = Math.min(Math.max(args.limit ?? 20, 1), 100);
-      const files = await newestSessionFiles(ctx.sessionsDir, 5);
+      const allFiles = await newestSessionFiles(ctx.sessionsDir, Number.MAX_SAFE_INTEGER);
+      const files = allFiles.slice(0, 5);
       const out: Array<Record<string, unknown>> = [];
+      const integrityWarnings: Array<{ file: string; reason: string }> = [];
       for (const f of files) {
-        try {
-          const events = await readTrace(f.path);
-          for (const e of [...events].reverse()) {
-            if (args.verdict && e.decision !== args.verdict) continue;
-            const input = (typeof e.input === "object" && e.input !== null ? e.input : {}) as Record<string, unknown>;
-            out.push({
-              agent: f.agent,
-              session: f.session,
-              seq: e.seq,
-              ts: e.ts,
-              tool: e.tool,
-              action: typeof input["command"] === "string" ? input["command"] : (input["file_path"] ?? null),
-              decision: e.decision,
-              matchedRule: e.matchedRule ?? null,
-              reason: e.reason ?? null,
-            });
-            if (out.length >= limit) {
-              return { decisions: out, truncated: files.length >= 5 ? "newest 5 sessions scanned" : undefined };
-            }
-          }
-        } catch {
-          // unreadable/corrupt ledger — skip it, never crash the read-only surface
+        const integrity = await verifyTrace(f.path);
+        if (!integrity.ok) {
+          integrityWarnings.push({
+            file: f.path,
+            reason: `${integrity.reason ?? "integrity failure"} at event ${integrity.brokenAt}`,
+          });
+          continue; // tampered events must never pass as trusted audit data
         }
+        const events = await readTrace(f.path);
+        for (const e of [...events].reverse()) {
+          if (args.verdict && e.decision !== args.verdict) continue;
+          const input = (typeof e.input === "object" && e.input !== null ? e.input : {}) as Record<string, unknown>;
+          out.push({
+            agent: f.agent,
+            session: f.session,
+            seq: e.seq,
+            ts: e.ts,
+            tool: e.tool,
+            action: typeof input["command"] === "string" ? input["command"] : (input["file_path"] ?? null),
+            decision: e.decision,
+            matchedRule: e.matchedRule ?? null,
+            reason: e.reason ?? null,
+          });
+          if (out.length >= limit) break;
+        }
+        if (out.length >= limit) break;
       }
-      return { decisions: out, truncated: undefined };
+      return {
+        decisions: out,
+        scannedSessions: files.length - integrityWarnings.length,
+        totalSessions: allFiles.length,
+        integrityWarnings,
+        truncated: allFiles.length > 5 ? "only the newest 5 sessions scanned" : undefined,
+      };
     },
 
     /** The installed policy in agent-readable form. */
@@ -111,30 +123,43 @@ export function createToolHandlers(ctx: McpContext) {
       };
     },
 
-    /** Aggregate decision counts across all ledgers (integrity-checked). */
+    /** Aggregate decision counts across ALL ledgers, integrity-gated: events
+     *  from tampered sessions are excluded from the trusted counts. */
     async stats() {
-      const files = await newestSessionFiles(ctx.sessionsDir, 50);
+      const files = await newestSessionFiles(ctx.sessionsDir, Number.MAX_SAFE_INTEGER);
       let allow = 0;
       let deny = 0;
       let ask = 0;
       let tamperedSessions = 0;
       let events = 0;
+      let scannedSessions = 0;
+      const tamperedFiles: string[] = [];
       for (const f of files) {
         const integrity = await verifyTrace(f.path);
-        if (!integrity.ok) tamperedSessions += 1;
-        try {
-          const eventsList = await readTrace(f.path);
-          events += eventsList.length;
-          for (const e of eventsList) {
-            if (e.decision === "allow") allow += 1;
-            else if (e.decision === "deny") deny += 1;
-            else ask += 1;
-          }
-        } catch {
-          // corrupt line — already reflected in tamperedSessions
+        if (!integrity.ok) {
+          tamperedSessions += 1;
+          tamperedFiles.push(f.path);
+          continue; // untrusted — excluded from counts entirely
+        }
+        scannedSessions += 1;
+        const eventsList = await readTrace(f.path);
+        events += eventsList.length;
+        for (const e of eventsList) {
+          if (e.decision === "allow") allow += 1;
+          else if (e.decision === "deny") deny += 1;
+          else ask += 1;
         }
       }
-      return { sessions: files.length, events, allow, deny, ask, tamperedSessions };
+      return {
+        sessions: files.length,
+        scannedSessions,
+        events,
+        allow,
+        deny,
+        ask,
+        tamperedSessions,
+        tamperedFiles: tamperedFiles.length > 0 ? tamperedFiles : undefined,
+      };
     },
   };
 }
