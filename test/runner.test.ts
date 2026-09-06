@@ -1,4 +1,4 @@
-import { mkdtemp } from "node:fs/promises";
+import { access, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -52,5 +52,39 @@ describe("runGuarded", () => {
     const trace = await TraceWriter.start(await tmpDir());
     const result = await runGuarded({ command: "cat", trace });
     expect(result.exitCode).toBe(0);
+  });
+
+  it("blocks without executing when the decision is deny", async () => {
+    const sandbox = await tmpDir();
+    const sentinel = join(sandbox, "should-not-exist");
+    const trace = await TraceWriter.start(await tmpDir());
+    const result = await runGuarded({
+      command: `touch "${sentinel}"`,
+      trace,
+      decision: { decision: "deny", matchedRule: "rm-recursive", reason: "nope" },
+    });
+
+    expect(result.blocked).toBe(true);
+    expect(result.exitCode).toBe(2);
+    await expect(access(sentinel)).rejects.toThrow();
+
+    const events = await readTrace(trace.filePath);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.decision).toBe("deny");
+    expect(events[0]!.result).toBe("blocked");
+    expect(events[0]!.matchedRule).toBe("rm-recursive");
+  });
+
+  it("treats ask as deny in headless exec mode", async () => {
+    const trace = await TraceWriter.start(await tmpDir());
+    const result = await runGuarded({
+      command: "echo hi",
+      trace,
+      decision: { decision: "ask", reason: "needs a human" },
+    });
+    expect(result.blocked).toBe(true);
+    const events = await readTrace(trace.filePath);
+    expect(events[0]!.decision).toBe("ask");
+    expect(events[0]!.result).toBe("blocked");
   });
 });

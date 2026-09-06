@@ -35,7 +35,7 @@ export function parseSegments(raw: string): string[][] {
         if (current.length > 0) segments.push(current);
         current = [];
       } else if ("pattern" in token) {
-        current.push(token.pattern);
+        current.push((token as { pattern: string }).pattern);
       }
     }
     if (current.length > 0) segments.push(current);

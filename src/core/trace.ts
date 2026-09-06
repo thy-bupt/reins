@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export const GENESIS_HASH = "genesis";
@@ -14,6 +15,7 @@ export interface TraceEvent {
   input: unknown;
   decision: Decision;
   reason?: string;
+  matchedRule?: string;
   result?: TraceResult;
   exitCode?: number;
   prevHash: string;
@@ -30,6 +32,7 @@ function hashEvent(event: Omit<TraceEvent, "hash">): string {
     input: event.input,
     decision: event.decision,
     reason: event.reason,
+    matchedRule: event.matchedRule,
     result: event.result,
     exitCode: event.exitCode,
     prevHash: event.prevHash,
@@ -57,6 +60,25 @@ export class TraceWriter {
     return new TraceWriter(filePath, 0, GENESIS_HASH);
   }
 
+  /** Re-open an existing session file (or create it) and continue its hash
+   *  chain. Refuses to append to a tampered or corrupt trace — fail closed. */
+  static async open(filePath: string): Promise<TraceWriter> {
+    await mkdir(dirname(filePath), { recursive: true });
+    if (!existsSync(filePath)) {
+      await writeFile(filePath, "", { flag: "w" });
+      return new TraceWriter(filePath, 0, GENESIS_HASH);
+    }
+    const integrity = await verifyTrace(filePath);
+    if (!integrity.ok) {
+      throw new CorruptTraceError(
+        `refusing to append to a tampered or corrupt trace (${integrity.reason ?? "unknown"} at event ${integrity.brokenAt}): ${filePath}`,
+      );
+    }
+    const events = await readTrace(filePath);
+    const last = events[events.length - 1];
+    return new TraceWriter(filePath, last ? last.seq + 1 : 0, last ? last.hash : GENESIS_HASH);
+  }
+
   async append(entry: TraceEntryInput): Promise<TraceEvent> {
     const event: Omit<TraceEvent, "hash"> = {
       seq: this.nextSeq,
@@ -65,6 +87,7 @@ export class TraceWriter {
       input: entry.input,
       decision: entry.decision,
       reason: entry.reason,
+      matchedRule: entry.matchedRule,
       result: entry.result,
       exitCode: entry.exitCode,
       prevHash: this.prevHash,
@@ -91,7 +114,7 @@ export async function readTrace(filePath: string): Promise<TraceEvent[]> {
   try {
     content = await readFile(filePath, "utf8");
   } catch (err) {
-    throw new Error(`cannot read trace file ${filePath}: ${String(err)}`);
+    throw new Error(`cannot read trace file ${filePath}: ${String(err)}`, { cause: err });
   }
   const events: TraceEvent[] = [];
   const lines = content.split("\n");

@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { TraceWriter, readTrace, verifyTrace } from "../src/core/trace.js";
-
 async function tmpDir() {
   return mkdtemp(join(tmpdir(), "railguard-test-"));
 }
@@ -39,6 +38,66 @@ describe("TraceWriter", () => {
     await trace.append({ tool: "bash", input: { command: "ls" }, decision: "allow" });
     expect(trace.filePath).toMatch(/\.jsonl$/);
     expect(trace.filePath).not.toMatch(/:/);
+  });
+
+  it("records matchedRule and keeps it inside the hash", async () => {
+    const dir = await tmpDir();
+    const trace = await TraceWriter.start(dir);
+    const e1 = await trace.append({
+      tool: "Bash",
+      input: { command: "rm -rf /" },
+      decision: "deny",
+      matchedRule: "rm-recursive",
+      reason: "destructive",
+      result: "blocked",
+    });
+    expect(e1.matchedRule).toBe("rm-recursive");
+    // tampering with matchedRule must break verification
+    const lines = (await readFile(trace.filePath, "utf8")).trim().split("\n");
+    const tampered = JSON.parse(lines[0]!) as Record<string, unknown>;
+    tampered.matchedRule = "innocent-rule";
+    lines[0] = JSON.stringify(tampered);
+    await writeFile(trace.filePath, lines.join("\n") + "\n");
+    const result = await verifyTrace(trace.filePath);
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("TraceWriter.open", () => {
+  it("continues an existing session's hash chain across processes", async () => {
+    const dir = await tmpDir();
+    const first = await TraceWriter.start(dir);
+    const e1 = await first.append({ tool: "bash", input: { command: "ls" }, decision: "allow" });
+
+    const reopened = await TraceWriter.open(first.filePath);
+    const e2 = await reopened.append({ tool: "bash", input: { command: "pwd" }, decision: "allow" });
+
+    expect(e2.seq).toBe(1);
+    expect(e2.prevHash).toBe(e1.hash);
+    const result = await verifyTrace(first.filePath);
+    expect(result.ok).toBe(true);
+    expect(result.events).toBe(2);
+  });
+
+  it("creates a new empty session when the file does not exist", async () => {
+    const dir = await tmpDir();
+    const filePath = join(dir, "fresh.jsonl");
+    const trace = await TraceWriter.open(filePath);
+    const e = await trace.append({ tool: "bash", input: { command: "ls" }, decision: "allow" });
+    expect(e.seq).toBe(0);
+    expect(e.prevHash).toBe("genesis");
+  });
+
+  it("refuses to append to a corrupt trace (fail closed)", async () => {
+    const dir = await tmpDir();
+    const trace = await TraceWriter.start(dir);
+    await trace.append({ tool: "bash", input: { command: "ls" }, decision: "allow" });
+    const lines = (await readFile(trace.filePath, "utf8")).trim().split("\n");
+    const tampered = JSON.parse(lines[0]!) as Record<string, unknown>;
+    tampered.decision = "deny";
+    await writeFile(trace.filePath, JSON.stringify(tampered) + "\n");
+
+    await expect(TraceWriter.open(trace.filePath)).rejects.toThrow(/corrupt|partial/i);
   });
 });
 
