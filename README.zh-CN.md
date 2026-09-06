@@ -1,6 +1,6 @@
 # reins（中文说明）
 
-**给 AI 编码 agent 用的 fail-closed 安全护栏。** 声明式策略引擎 + 防篡改操作追踪 + 会话回放。与 agent 无关、本地优先、一条命令安装。
+**握住你 AI 编码 agent 的缰绳。** fail-closed 安全层： 声明式策略引擎 + 防篡改操作追踪 + 会话回放。与 agent 无关、本地优先、一条命令安装。
 
 英文文档见 [README.md](README.md)。
 

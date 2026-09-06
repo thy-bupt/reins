@@ -1,6 +1,6 @@
 # reins
 
-**A fail-closed safety rail for AI coding agents.** Declarative policy engine, tamper-evident trace, session replay. Agent-agnostic, local-first, one npm install.
+**Hold the reins of your AI coding agent.** A fail-closed safety layer: declarative policy engine, tamper-evident trace, session replay. Agent-agnostic, local-first, one npm install.
 
 ```bash
 npm i -g reins
