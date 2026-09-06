@@ -1,0 +1,53 @@
+{
+  "name": "railguard",
+  "version": "0.1.0",
+  "description": "Fail-closed safety rail for AI coding agents: declarative policy engine, tamper-evident trace, session replay. Agent-agnostic, local-first.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "railguard": "dist/cli/main.js"
+  },
+  "files": [
+    "dist",
+    "policies"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "check": "pnpm lint && pnpm build && pnpm test"
+  },
+  "keywords": [
+    "ai-agent",
+    "security",
+    "policy",
+    "sandbox",
+    "claude-code",
+    "hooks",
+    "audit",
+    "llm"
+  ],
+  "dependencies": {
+    "commander": "^15.0.0",
+    "picomatch": "^4.0.7",
+    "shell-quote": "^1.10.0",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.4.1",
+    "@types/shell-quote": "^1.7.5",
+    "eslint": "^10.10.0",
+    "prettier": "^3.9.6",
+    "typescript": "^7.0.2",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^5.0.0"
+  }
+}
