@@ -59,34 +59,34 @@ const INIT_TARGETS: Record<string, { settingsFlag: string; markers: Array<(conte
   claude: {
     settingsFlag: "settings.json",
     markers: [
-      (c) => expect(JSON.parse(c).hooks.PreToolUse.some((g: { hooks: Array<{ command: string }> }) => g.hooks.some((h) => h.command === "railguard hook claude"))),
+      (c) => expect(JSON.parse(c).hooks.PreToolUse.some((g: { hooks: Array<{ command: string }> }) => g.hooks.some((h) => h.command === "reins hook claude"))),
     ],
   },
   gemini: {
     settingsFlag: "settings.json",
     markers: [
-      (c) => expect(JSON.parse(c).hooks.BeforeTool.some((g: { hooks: Array<{ command: string }> }) => g.hooks.some((h) => h.command === "railguard hook gemini"))),
+      (c) => expect(JSON.parse(c).hooks.BeforeTool.some((g: { hooks: Array<{ command: string }> }) => g.hooks.some((h) => h.command === "reins hook gemini"))),
     ],
   },
   grok: {
-    settingsFlag: join("hooks", "railguard.json"),
+    settingsFlag: join("hooks", "reins.json"),
     markers: [
-      (c) => expect(JSON.parse(c).hooks.PreToolUse.some((g: { hooks: Array<{ command: string }> }) => g.hooks.some((h) => h.command === "railguard hook grok"))),
+      (c) => expect(JSON.parse(c).hooks.PreToolUse.some((g: { hooks: Array<{ command: string }> }) => g.hooks.some((h) => h.command === "reins hook grok"))),
     ],
   },
   codex: {
     settingsFlag: "hooks.json",
     markers: [
-      (c) => expect(JSON.parse(c).hooks.PreToolUse.some((g: { hooks: Array<{ command: string }> }) => g.hooks.some((h) => h.command === "railguard hook codex"))),
+      (c) => expect(JSON.parse(c).hooks.PreToolUse.some((g: { hooks: Array<{ command: string }> }) => g.hooks.some((h) => h.command === "reins hook codex"))),
     ],
   },
   opencode: {
-    settingsFlag: "railguard.js",
-    markers: [(c) => expect(c).toContain("tool.execute.before"), (c) => expect(c).toContain("railguard hook opencode")],
+    settingsFlag: "reins.js",
+    markers: [(c) => expect(c).toContain("tool.execute.before"), (c) => expect(c).toContain("reins hook opencode")],
   },
   pi: {
-    settingsFlag: "railguard.ts",
-    markers: [(c) => expect(c).toContain("tool_call"), (c) => expect(c).toContain("block: true"), (c) => expect(c).toContain("railguard hook pi")],
+    settingsFlag: "reins.ts",
+    markers: [(c) => expect(c).toContain("tool_call"), (c) => expect(c).toContain("block: true"), (c) => expect(c).toContain("reins hook pi")],
   },
 };
 
@@ -101,20 +101,20 @@ describe.skipIf(!cli)("agent matrix e2e: init + hook + trace for every adapter",
         home = mkdtempSync();
         agentDir = mkdtempSync();
         const init = runCli(["init", agent, "--settings", join(agentDir, INIT_TARGETS[agent]!.settingsFlag)], {
-          RAILGUARD_HOME: home,
+          REINS_HOME: home,
         });
         expect(init.status, `init ${agent} failed: ${init.stderr}`).toBe(0);
-        expect(existsSync(join(home, "policy.yaml")), "policy must be installed into RAILGUARD_HOME").toBe(true);
+        expect(existsSync(join(home, "policy.yaml")), "policy must be installed into REINS_HOME").toBe(true);
       };
 
       function mkdtempSync(): string {
         // spawnSync-based tests need sync tempdirs
-        const dir = join(tmpdir(), `railguard-mtx-${agent}-${Math.random().toString(36).slice(2)}`);
+        const dir = join(tmpdir(), `reins-mtx-${agent}-${Math.random().toString(36).slice(2)}`);
         mkdirSync(dir, { recursive: true });
         return dir;
       }
 
-      it(`init ${agent} writes a config carrying the railguard hook`, () => {
+      it(`init ${agent} writes a config carrying the reins hook`, () => {
         boot();
         const configPath = join(agentDir, INIT_TARGETS[agent]!.settingsFlag);
         expect(existsSync(configPath), `${configPath} must exist`).toBe(true);
@@ -134,7 +134,7 @@ describe.skipIf(!cli)("agent matrix e2e: init + hook + trace for every adapter",
       for (const fixture of FIXTURES[agent]!) {
         it(`hook: ${fixture.label} → ${fixture.shouldBlock ? "blocked (exit 2)" : "allowed (exit 0)"}`, () => {
           boot();
-          const r = runCli(["hook", agent], { RAILGUARD_HOME: home }, fixture.payload);
+          const r = runCli(["hook", agent], { REINS_HOME: home }, fixture.payload);
           if (fixture.shouldBlock) {
             expect(r.status, `expected block, got ${r.status}; stderr=${r.stderr}`).toBe(2);
             expect(r.stderr).toContain(fixture.stderrContains!);
@@ -146,7 +146,7 @@ describe.skipIf(!cli)("agent matrix e2e: init + hook + trace for every adapter",
           // every decision lands in a per-agent session ledger with an intact chain
           const tracePath = join(home, "sessions", `${agent}-${sessionIdOf(fixture)}.jsonl`);
           expect(existsSync(tracePath), `trace ${tracePath} must exist`).toBe(true);
-          const verify = runCli(["trace", "verify", tracePath], { RAILGUARD_HOME: home });
+          const verify = runCli(["trace", "verify", tracePath], { REINS_HOME: home });
           expect(verify.status).toBe(0);
           expect(verify.stdout).toContain("hash chain intact");
         });

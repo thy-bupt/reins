@@ -11,7 +11,7 @@ export interface HookOutcome {
 export type HookChannel = "claude" | "gemini" | "grok" | "codex" | "opencode" | "pi";
 
 export const FAIL_CLOSED_STDERR =
-  "[railguard] invalid hook payload — blocking (fail-closed). Run `railguard doctor` if this persists.";
+  "[reins] invalid hook payload — blocking (fail-closed). Run `reins doctor` if this persists.";
 
 export interface ChannelEncoding {
   /** channels with a real "ask" channel render ask as JSON; others fail closed */
@@ -66,7 +66,7 @@ export async function runAdapterHook(
     return {
       exitCode: 2,
       stdout: "",
-      stderr: `[railguard] blocked by rule "${result.matchedRule ?? "default"}": ${result.reason ?? "policy denied this action"}`,
+      stderr: `[reins] blocked by rule "${result.matchedRule ?? "default"}": ${result.reason ?? "policy denied this action"}`,
     };
   }
 
@@ -76,7 +76,7 @@ export async function runAdapterHook(
       return {
         exitCode: 2,
         stdout: "",
-        stderr: `[railguard] requires human approval (ask) — rule "${result.matchedRule ?? "default"}": ${result.reason ?? "policy wants a human decision"}`,
+        stderr: `[reins] requires human approval (ask) — rule "${result.matchedRule ?? "default"}": ${result.reason ?? "policy wants a human decision"}`,
       };
     }
     return {
@@ -85,7 +85,7 @@ export async function runAdapterHook(
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "ask",
-          permissionDecisionReason: `[railguard] ${result.matchedRule ?? "default"}: ${result.reason ?? "policy wants a human decision"}`,
+          permissionDecisionReason: `[reins] ${result.matchedRule ?? "default"}: ${result.reason ?? "policy wants a human decision"}`,
         },
       }),
       stderr: "",
@@ -122,7 +122,7 @@ export function normalizeCamelCasePayload(payload: unknown): ToolEvent | null {
   };
 }
 
-/** In-process agents (opencode plugin, pi extension) call `railguard hook
+/** In-process agents (opencode plugin, pi extension) call `reins hook
  *  <agent>` with our own contract: { tool, args }. Tool input keys vary per
  *  agent ("command", "filePath", "path"…) — pick the ones the decider knows. */
 export function normalizeLoosePayload(payload: unknown): ToolEvent | null {
@@ -170,7 +170,7 @@ function entryHasCommand(entry: unknown, command: string): boolean {
 }
 
 /** Pure merge for hook-object settings (Claude Code, Gemini CLI, Codex
- *  hooks.json): ensure exactly one railguard entry for the event, preserve
+ *  hooks.json): ensure exactly one reins entry for the event, preserve
  *  everything else. Idempotent and non-mutating. Omit `matcher` to check
  *  every tool call. */
 export function mergeHooksEntry(
@@ -200,7 +200,7 @@ export function mergeHooksEntry(
   return { settings, changed: true };
 }
 
-/** true when settings already carry a railguard hook entry for the event. */
+/** true when settings already carry a reins hook entry for the event. */
 export function hasHooksEntry(
   settings: unknown,
   opts: { event: string; command: string },

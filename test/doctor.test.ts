@@ -18,7 +18,7 @@ rules:
 `;
 
 async function tmpHome() {
-  return mkdtemp(join(tmpdir(), "railguard-doctor-"));
+  return mkdtemp(join(tmpdir(), "reins-doctor-"));
 }
 
 describe("runDoctor", () => {
@@ -28,7 +28,7 @@ describe("runDoctor", () => {
     await mkdir(join(home, "sessions"));
     const settingsPath = join(home, "settings.json");
     await writeFile(settingsPath, JSON.stringify({
-      hooks: { PreToolUse: [{ matcher: "Bash|Write|Edit|MultiEdit|NotebookEdit", hooks: [{ type: "command", command: "railguard hook claude" }] }] },
+      hooks: { PreToolUse: [{ matcher: "Bash|Write|Edit|MultiEdit|NotebookEdit", hooks: [{ type: "command", command: "reins hook claude" }] }] },
     }));
 
     const report = await runDoctor({ home, settingsPath, checkPath: false });
@@ -109,18 +109,18 @@ describe("runDoctor", () => {
     const agentDir = await tmpHome();
     const agentPaths = {
       gemini: join(agentDir, "gemini-settings.json"),
-      grok: join(agentDir, join(".grok", "hooks", "railguard.json")),
+      grok: join(agentDir, join(".grok", "hooks", "reins.json")),
       codexHooks: join(agentDir, join(".codex", "hooks.json")),
       codexConfig: join(agentDir, join(".codex", "config.toml")),
-      opencode: join(agentDir, "railguard.js"),
-      pi: join(agentDir, "railguard.ts"),
+      opencode: join(agentDir, "reins.js"),
+      pi: join(agentDir, "reins.ts"),
     };
 
     // nothing installed yet → warns, but doctor stays healthy
     // (the primary claude hook must be installed for healthy=true)
     const claudeSettings = join(home, "settings.json");
     await writeFile(claudeSettings, JSON.stringify({
-      hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "railguard hook claude" }] }] },
+      hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "reins hook claude" }] }] },
     }));
     const none = await runDoctor({ home, settingsPath: claudeSettings, checkPath: false, agentPaths });
     for (const name of ["agent:gemini", "agent:grok", "agent:codex", "agent:opencode", "agent:pi"]) {
@@ -130,19 +130,19 @@ describe("runDoctor", () => {
 
     // install everything → all ok
     await writeFile(agentPaths.gemini!, JSON.stringify({
-      hooks: { BeforeTool: [{ matcher: "x", hooks: [{ type: "command", command: "railguard hook gemini" }] }] },
+      hooks: { BeforeTool: [{ matcher: "x", hooks: [{ type: "command", command: "reins hook gemini" }] }] },
     }));
     await mkdir(join(agentDir, ".grok", "hooks"), { recursive: true });
     await writeFile(agentPaths.grok!, JSON.stringify({
-      hooks: { PreToolUse: [{ hooks: [{ type: "command", command: "railguard hook grok" }] }] },
+      hooks: { PreToolUse: [{ hooks: [{ type: "command", command: "reins hook grok" }] }] },
     }));
     await mkdir(join(agentDir, ".codex"), { recursive: true });
     await writeFile(agentPaths.codexHooks!, JSON.stringify({
-      hooks: { PreToolUse: [{ hooks: [{ type: "command", command: "railguard hook codex" }] }] },
+      hooks: { PreToolUse: [{ hooks: [{ type: "command", command: "reins hook codex" }] }] },
     }));
     await writeFile(agentPaths.codexConfig!, "[features]\nhooks = true\n");
-    await writeFile(agentPaths.opencode!, "// railguard\ntool.execute.before\nrailguard hook opencode\n");
-    await writeFile(agentPaths.pi!, "pi.on('tool_call', ...) block: true railguard hook pi\n");
+    await writeFile(agentPaths.opencode!, "// reins\ntool.execute.before\nreins hook opencode\n");
+    await writeFile(agentPaths.pi!, "pi.on('tool_call', ...) block: true reins hook pi\n");
 
     const all = await runDoctor({ home, settingsPath: join(home, "settings.json"), checkPath: false, agentPaths });
     for (const name of ["agent:gemini", "agent:grok", "agent:codex", "agent:opencode", "agent:pi"]) {
@@ -155,7 +155,7 @@ describe("runDoctor", () => {
     await writeFile(join(home, "policy.yaml"), goodPolicy);
     const agentDir = await tmpHome();
     await writeFile(join(agentDir, "hooks.json"), JSON.stringify({
-      hooks: { PreToolUse: [{ hooks: [{ type: "command", command: "railguard hook codex" }] }] },
+      hooks: { PreToolUse: [{ hooks: [{ type: "command", command: "reins hook codex" }] }] },
     }));
 
     const report = await runDoctor({

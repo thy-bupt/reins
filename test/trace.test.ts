@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { TraceWriter, readTrace, verifyTrace } from "../src/core/trace.js";
 async function tmpDir() {
-  return mkdtemp(join(tmpdir(), "railguard-test-"));
+  return mkdtemp(join(tmpdir(), "reins-test-"));
 }
 
 describe("TraceWriter", () => {

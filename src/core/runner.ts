@@ -37,7 +37,7 @@ export async function runGuarded(opts: RunGuardedOptions): Promise<RunResult> {
     return { blocked: true, exitCode: 2 };
   }
 
-  const shell = opts.shell ?? process.env.RAILGUARD_SHELL ?? "/bin/bash";
+  const shell = opts.shell ?? process.env.REINS_SHELL ?? "/bin/bash";
   const input: Record<string, unknown> = { command: opts.command };
   if (opts.cwd !== undefined) input.cwd = opts.cwd;
 

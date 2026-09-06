@@ -1,6 +1,6 @@
 import { mergeHooksEntry } from "../common.js";
 
-export const CODEX_HOOK_COMMAND = "railguard hook codex";
+export const CODEX_HOOK_COMMAND = "reins hook codex";
 const CODEX_EVENT = "PreToolUse";
 
 /** Codex reads ~/.codex/hooks.json (same shape Claude Code uses), gated by

@@ -2,7 +2,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { hasRailguardHook } from "../adapters/claude/installer.js";
+import { hasReinsHook } from "../adapters/claude/installer.js";
 import { hasGeminiHook } from "../adapters/gemini/installer.js";
 import { hasGrokHook } from "../adapters/grok/installer.js";
 import { hasCodexHook, configTomlHasHooksEnabled } from "../adapters/codex/installer.js";
@@ -34,7 +34,7 @@ export interface AgentPaths {
 export interface DoctorOptions {
   home: string;
   settingsPath: string;
-  /** verify the `railguard` binary resolves on PATH (skippable in tests) */
+  /** verify the `reins` binary resolves on PATH (skippable in tests) */
   checkPath?: boolean;
   agentPaths?: AgentPaths;
 }
@@ -53,7 +53,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
     checks.push({
       name: "policy",
       status: "fail",
-      detail: `no policy at ${policyPath} — run \`railguard init claude\``,
+      detail: `no policy at ${policyPath} — run \`reins init claude\``,
     });
   } else {
     try {
@@ -82,13 +82,13 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
   } else {
     try {
       const settings: unknown = JSON.parse(await readFile(opts.settingsPath, "utf8"));
-      if (hasRailguardHook(settings)) {
+      if (hasReinsHook(settings)) {
         checks.push({ name: "claude-hook", status: "ok", detail: `installed in ${opts.settingsPath}` });
       } else {
         checks.push({
           name: "claude-hook",
           status: "fail",
-          detail: `no railguard entry in ${opts.settingsPath} — agents run fail-open`,
+          detail: `no reins entry in ${opts.settingsPath} — agents run fail-open`,
         });
       }
     } catch (err) {
@@ -102,7 +102,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
 
   // 3. other agent adapters (optional — warn, never fail, on absence)
   const agents = opts.agentPaths ?? {};
-  const hint = (name: string) => `run \`railguard init ${name}\` to install`;
+  const hint = (name: string) => `run \`reins init ${name}\` to install`;
 
   const geminiSettings = await readTextIfExists(agents.gemini);
   if (geminiSettings !== null && hasGeminiHook(geminiSettings)) {
@@ -187,15 +187,15 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
 
   // 6. binary on PATH
   if (opts.checkPath !== false) {
-    const probe = spawnSync("railguard", ["--version"], { encoding: "utf8" });
+    const probe = spawnSync("reins", ["--version"], { encoding: "utf8" });
     if (probe.error || probe.status !== 0) {
       checks.push({
         name: "binary",
         status: "warn",
-        detail: "`railguard` not found on PATH — the hook command will fail; install with `npm i -g railguard`",
+        detail: "`reins` not found on PATH — the hook command will fail; install with `npm i -g reins`",
       });
     } else {
-      checks.push({ name: "binary", status: "ok", detail: `railguard ${(probe.stdout ?? "").trim()}` });
+      checks.push({ name: "binary", status: "ok", detail: `reins ${(probe.stdout ?? "").trim()}` });
     }
   }
 
@@ -208,7 +208,7 @@ export function formatDoctorReport(report: DoctorReport): string {
     return ` ${icon} ${c.name.padEnd(12)} ${c.detail}`;
   });
   lines.push("");
-  lines.push(report.healthy ? "railguard looks healthy." : "issues found — see ✗ items above.");
+  lines.push(report.healthy ? "reins looks healthy." : "issues found — see ✗ items above.");
   return lines.join("\n");
 }
 

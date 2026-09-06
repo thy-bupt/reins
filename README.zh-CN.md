@@ -1,4 +1,4 @@
-# railguard（中文说明）
+# reins（中文说明）
 
 **给 AI 编码 agent 用的 fail-closed 安全护栏。** 声明式策略引擎 + 防篡改操作追踪 + 会话回放。与 agent 无关、本地优先、一条命令安装。
 
@@ -12,43 +12,43 @@ AI 编码 agent 以你的权限执行 shell 命令、改写文件。当前生态
 2. **沙箱太重**。microVM / 云沙箱（E2B、microsandbox、gVisor…）解决"代码在哪里跑"，但不给你可读的策略、也没有审计账本——而且没人为了更安全地跑 `npm test` 去装虚拟机。
 3. **没人留底账**。agent 干了意外的事之后，你需要一份防篡改的完整操作记录，还需要能回答"更严的策略能不能拦住它？"
 
-railguard 就是补在中间的轻量层：**策略 + 审计 + 回放**，进程内完成，无守护进程、无虚拟机。
+reins 就是补在中间的轻量层：**策略 + 审计 + 回放**，进程内完成，无守护进程、无虚拟机。
 
 ## 核心能力
 
 - **策略门**：YAML 声明 `allow / ask / deny`。支持 程序名+旗标 结构化匹配（能识别组合短旗标和包装命令：`rm -fr`、`sudo rm -rf`、`find -exec rm` 都会归一到 `rm`）、原始正则（抓 `curl … | sh`）、文件路径 glob（`.env`、`.ssh/`、`.git/`）。
-- **防篡改追踪**：每个决策追加进 JSONL 会话文件，SHA-256 哈希链（每条记录承诺前一条）。`railguard trace verify` 校验链条；**链条损坏时 hook 拒绝继续记录**。
+- **防篡改追踪**：每个决策追加进 JSONL 会话文件，SHA-256 哈希链（每条记录承诺前一条）。`reins trace verify` 校验链条；**链条损坏时 hook 拒绝继续记录**。
 - **默认 fail-closed**：hook 载荷畸形、策略加载失败、追踪被篡改 → 一律拦截。与 #32990 的失效模式正好相反。
-- **回放**：`railguard replay <session> --policy 更严的.yaml` 用候选策略重放历史会话，报告"哪些会被拦"，不执行任何东西。
-- **体检**：`railguard doctor` 检查策略、hook 安装、追踪完整性，发现失效放行会明确告诉你。
+- **回放**：`reins replay <session> --policy 更严的.yaml` 用候选策略重放历史会话，报告"哪些会被拦"，不执行任何东西。
+- **体检**：`reins doctor` 检查策略、hook 安装、追踪完整性，发现失效放行会明确告诉你。
 
 ## 支持的 agent
 
 | agent | 安装 | 集成方式 | ask 规则 |
 | --- | --- | --- | --- |
-| Claude Code | `railguard init claude` | settings.json 的 PreToolUse hook | ✅ 交还给人 |
-| Gemini CLI | `railguard init gemini` | settings.json 的 BeforeTool hook | fail closed |
-| Codex | `railguard init codex` | hooks.json + config.toml feature 开关 | fail closed |
-| Grok Build | `railguard init grok` | ~/.grok/hooks/ 下的 hook 文件 | fail closed |
-| opencode | `railguard init opencode` | 自动加载的插件（抛错阻断） | fail closed |
-| pi | `railguard init pi` | 自动加载的扩展（{block:true} 阻断） | fail closed |
-| 其他一切 | `railguard exec -- <cmd>` | 通用包装器 | fail closed |
+| Claude Code | `reins init claude` | settings.json 的 PreToolUse hook | ✅ 交还给人 |
+| Gemini CLI | `reins init gemini` | settings.json 的 BeforeTool hook | fail closed |
+| Codex | `reins init codex` | hooks.json + config.toml feature 开关 | fail closed |
+| Grok Build | `reins init grok` | ~/.grok/hooks/ 下的 hook 文件 | fail closed |
+| opencode | `reins init opencode` | 自动加载的插件（抛错阻断） | fail closed |
+| pi | `reins init pi` | 自动加载的扩展（{block:true} 阻断） | fail closed |
+| 其他一切 | `reins exec -- <cmd>` | 通用包装器 | fail closed |
 
 每个适配器都写入同一本防篡改账本（按 agent 分文件）。
 
 ## 快速开始
 
 ```bash
-npm i -g railguard
-railguard init claude     # 安装策略 + PreToolUse hook（自动备份原 settings.json）
+npm i -g reins
+reins init claude     # 安装策略 + PreToolUse hook（自动备份原 settings.json）
 ```
 
 ```console
 $ # agent 想执行 rm -rf：
-[railguard] blocked by rule "rm-recursive": Recursive deletion is destructive and hard to undo   (exit 2)
+[reins] blocked by rule "rm-recursive": Recursive deletion is destructive and hard to undo   (exit 2)
 
-$ railguard trace verify
-ok: 47 events, hash chain intact — ~/.railguard/sessions/claude-….jsonl
+$ reins trace verify
+ok: 47 events, hash chain intact — ~/.reins/sessions/claude-….jsonl
 ```
 
 ## 策略示例
@@ -83,11 +83,11 @@ rules:
 
 | 命令 | 作用 |
 | --- | --- |
-| `railguard init claude` | 安装策略 + hook |
-| `railguard exec -- <cmd>` | 任意脚本/agent/CI 通用包装器 |
-| `railguard trace list` / `trace verify` | 列出 / 校验会话追踪 |
-| `railguard doctor` | 全面体检 |
-| `railguard replay [file] --policy <p>` | 用另一份策略重放会话 |
+| `reins init claude` | 安装策略 + hook |
+| `reins exec -- <cmd>` | 任意脚本/agent/CI 通用包装器 |
+| `reins trace list` / `trace verify` | 列出 / 校验会话追踪 |
+| `reins doctor` | 全面体检 |
+| `reins replay [file] --policy <p>` | 用另一份策略重放会话 |
 
 ## 诚实的边界
 

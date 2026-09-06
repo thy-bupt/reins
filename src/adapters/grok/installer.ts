@@ -1,13 +1,13 @@
 import { mergeHooksEntry } from "../common.js";
 
-export const GROK_HOOK_COMMAND = "railguard hook grok";
+export const GROK_HOOK_COMMAND = "reins hook grok";
 export const GROK_EVENT = "PreToolUse";
 
 /** Grok Build reads standalone JSON files from ~/.grok/hooks/*.json. Each file
  *  is {"hooks": {"PreToolUse": [group, ...]}}. We omit `matcher` so every
  *  tool call is policy-checked; non-command/file inputs fall through to the
  *  policy default. Existing groups (the user's own or other tools') in the
- *  same railguard file are preserved. */
+ *  same reins file are preserved. */
 export function grokHooksFileContent(existingContent: string | null): string {
   let existing: unknown = {};
   if (existingContent !== null && existingContent.trim() !== "") {

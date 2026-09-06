@@ -8,7 +8,7 @@ import {
 
 /**
  * pi hook handler. pi runs our generated extension in-process; the extension
- * subscribes to `tool_call`, shells out to `railguard hook pi` with our
+ * subscribes to `tool_call`, shells out to `reins hook pi` with our
  * payload contract ({ tool, args }), and returns { block: true, reason } when
  * the policy denies. There is no ask channel: ask rules fail closed.
  */

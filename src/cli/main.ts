@@ -22,7 +22,7 @@ import { formatDoctorReport, runDoctor } from "./doctor.js";
 import { formatReplayReport, replaySession } from "./replay.js";
 import {
   BUNDLED_POLICY_PATH,
-  railguardHome,
+  reinsHome,
   resolvePolicyPath,
   sessionsDir,
   userPolicyPath,
@@ -54,19 +54,19 @@ async function readAllStdin(): Promise<string> {
 }
 
 async function atomicWrite(filePath: string, content: string): Promise<void> {
-  const tmp = `${filePath}.railguard-tmp-${process.pid}`;
+  const tmp = `${filePath}.reins-tmp-${process.pid}`;
   await mkdir(dirname(filePath), { recursive: true });
   await writeFile(tmp, content, "utf8");
   await rename(tmp, filePath);
 }
 
 async function backupOnce(filePath: string): Promise<void> {
-  const backup = `${filePath}.railguard-backup`;
+  const backup = `${filePath}.reins-backup`;
   if (existsSync(filePath) && !existsSync(backup)) await copyFile(filePath, backup);
 }
 
 async function failClosed(message: string): Promise<never> {
-  process.stderr.write(`[railguard] ${message}\n`);
+  process.stderr.write(`[reins] ${message}\n`);
   process.exit(2);
 }
 
@@ -89,7 +89,7 @@ async function readJsonFile(filePath: string): Promise<unknown> {
 
 const program = new Command();
 program
-  .name("railguard")
+  .name("reins")
   .description(
     "Fail-closed safety rail for AI coding agents: policy engine, tamper-evident trace, session replay.",
   )
@@ -97,7 +97,7 @@ program
 
 program
   .command("init")
-  .description(`install the railguard hook for a coding agent (${HOOK_ADAPTER_NAMES.join(", ")})`)
+  .description(`install the reins hook for a coding agent (${HOOK_ADAPTER_NAMES.join(", ")})`)
   .argument("<adapter>", `agent adapter: ${HOOK_ADAPTER_NAMES.join(" | ")}`)
   .option("--policy <path>", "policy file to install as your default")
   .option(
@@ -160,7 +160,7 @@ program
       }
 
       case "grok": {
-        const hooksPath = opts.settings ?? join(homedir(), ".grok", "hooks", "railguard.json");
+        const hooksPath = opts.settings ?? join(homedir(), ".grok", "hooks", "reins.json");
         const existing = existsSync(hooksPath) ? await readFile(hooksPath, "utf8") : null;
         const content = grokHooksFileContent(existing);
         if (existing !== null && content === existing) {
@@ -202,21 +202,21 @@ program
 
       case "opencode": {
         const pluginPath =
-          opts.settings ?? join(homedir(), ".config", "opencode", "plugins", "railguard.js");
+          opts.settings ?? join(homedir(), ".config", "opencode", "plugins", "reins.js");
         await atomicWrite(pluginPath, opencodePluginSource());
         console.log(`plugin installed in ${pluginPath}`);
         break;
       }
 
       case "pi": {
-        const extPath = opts.settings ?? join(homedir(), ".pi", "agent", "extensions", "railguard.ts");
+        const extPath = opts.settings ?? join(homedir(), ".pi", "agent", "extensions", "reins.ts");
         await atomicWrite(extPath, piExtensionSource());
         console.log(`extension installed in ${extPath}`);
         break;
       }
     }
 
-    console.log("\nrailguard is live. Try: railguard trace list");
+    console.log("\nreins is live. Try: reins trace list");
   });
 
 program
@@ -265,7 +265,7 @@ program
     const result = await runGuarded({ command, trace, cwd: opts.cwd, decision });
     if (result.blocked) {
       process.stderr.write(
-        `[railguard] blocked by rule "${decision.matchedRule ?? "default"}": ${decision.reason ?? "policy denied this action"}\n`,
+        `[reins] blocked by rule "${decision.matchedRule ?? "default"}": ${decision.reason ?? "policy denied this action"}\n`,
       );
     }
     process.exit(result.exitCode);
@@ -312,9 +312,9 @@ trace
 program
   .command("doctor")
   .description("check that the rail is installed, intact, and tamper-free")
-  .option("--home <dir>", "railguard home", railguardHome())
+  .option("--home <dir>", "reins home", reinsHome())
   .option("--settings <path>", "Claude Code settings file", join(homedir(), ".claude", "settings.json"))
-  .option("--no-path-check", "skip checking whether railguard is on PATH")
+  .option("--no-path-check", "skip checking whether reins is on PATH")
   .action(async (opts: { home: string; settings: string; pathCheck: boolean }) => {
     const report = await runDoctor({
       home: opts.home,
@@ -322,11 +322,11 @@ program
       checkPath: opts.pathCheck,
       agentPaths: {
         gemini: join(homedir(), ".gemini", "settings.json"),
-        grok: join(homedir(), ".grok", "hooks", "railguard.json"),
+        grok: join(homedir(), ".grok", "hooks", "reins.json"),
         codexHooks: join(homedir(), ".codex", "hooks.json"),
         codexConfig: join(homedir(), ".codex", "config.toml"),
-        opencode: join(homedir(), ".config", "opencode", "plugins", "railguard.js"),
-        pi: join(homedir(), ".pi", "agent", "extensions", "railguard.ts"),
+        opencode: join(homedir(), ".config", "opencode", "plugins", "reins.js"),
+        pi: join(homedir(), ".pi", "agent", "extensions", "reins.ts"),
       },
     });
     console.log(formatDoctorReport(report));

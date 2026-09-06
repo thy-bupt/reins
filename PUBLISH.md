@@ -1,4 +1,4 @@
-# Publishing railguard — step-by-step
+# Publishing reins — step-by-step
 
 Everything in this repo is release-ready (v0.1.0 tagged). This checklist takes
 you from clone to public launch. Steps marked 🔒 need your accounts.
@@ -6,9 +6,9 @@ you from clone to public launch. Steps marked 🔒 need your accounts.
 ## 1. Create the GitHub repository
 
 ```bash
-cd railguard
+cd reins
 gh auth status                      # 🔒 make sure you're logged in
-gh repo create railguard --public --source=. --push \
+gh repo create reins --public --source=. --push \
   --description "Fail-closed safety rail for AI coding agents: policy engine, tamper-evident trace, session replay."
 ```
 
@@ -25,7 +25,7 @@ The workflow (`.github/workflows/ci.yml`) runs lint + build + tests on Node
 
 ```bash
 npm login                           # 🔒
-npm publish                         # package name "railguard" was verified available
+npm publish                         # package name "reins" was verified available
 git tag v0.1.0 && git push --tags   # tag exists locally if you cloned this repo
 ```
 
@@ -35,8 +35,8 @@ git tag v0.1.0 && git push --tags   # tag exists locally if you cloned this repo
 - Optional badges for the top of `README.md` (paste after publishing):
 
 ```markdown
-[![CI](https://github.com/YOUR_USERNAME/railguard/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/railguard/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/railguard)](https://www.npmjs.com/package/railguard)
+[![CI](https://github.com/YOUR_USERNAME/reins/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/reins/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/reins)](https://www.npmjs.com/package/reins)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ```
 
@@ -56,10 +56,10 @@ Paste these as issues so first-time contributors have concrete targets:
 ## 6. Launch posts
 
 **Show HN:**
-> Show HN: Railguard – a fail-closed safety rail for AI coding agents
+> Show HN: Reins – a fail-closed safety rail for AI coding agents
 >
 > An agent recently deleted the very hook that was blocking it, and the
-> system then allowed everything (anthropics/claude-code#32990). Railguard
+> system then allowed everything (anthropics/claude-code#32990). Reins
 > is a small npm tool that sits in the hook path of coding agents: a YAML
 > policy gate (allow/ask/deny), a tamper-evident decision ledger (SHA-256
 > hash chain — a broken chain blocks further logging), and replay, which

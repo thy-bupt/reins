@@ -1,4 +1,4 @@
-# Contributing to railguard
+# Contributing to reins
 
 Thanks for helping make AI agents safer. A few things to know before you open a PR.
 
@@ -6,7 +6,7 @@ Thanks for helping make AI agents safer. A few things to know before you open a 
 
 ```bash
 git clone <your fork>
-cd railguard
+cd reins
 pnpm install
 pnpm check   # lint + build + test — everything must pass
 ```

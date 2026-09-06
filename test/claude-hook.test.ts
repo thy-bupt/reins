@@ -26,7 +26,7 @@ rules:
 `);
 
 async function setup() {
-  const trace = await TraceWriter.start(await mkdtemp(join(tmpdir(), "railguard-hook-")));
+  const trace = await TraceWriter.start(await mkdtemp(join(tmpdir(), "reins-hook-")));
   return { trace };
 }
 

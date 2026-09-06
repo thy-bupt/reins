@@ -25,7 +25,7 @@ rules:
 `);
 
 async function setup() {
-  return TraceWriter.start(await mkdtemp(join(tmpdir(), "railguard-gemini-")));
+  return TraceWriter.start(await mkdtemp(join(tmpdir(), "reins-gemini-")));
 }
 
 describe("gemini hook adapter", () => {

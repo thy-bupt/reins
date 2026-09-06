@@ -9,19 +9,19 @@ const PACKAGE_ROOT = join(HERE, "..", "..");
 
 export const BUNDLED_POLICY_PATH = join(PACKAGE_ROOT, "policies", "default.yaml");
 
-export function railguardHome(): string {
-  return process.env["RAILGUARD_HOME"] ?? join(homedir(), ".railguard");
+export function reinsHome(): string {
+  return process.env["REINS_HOME"] ?? join(homedir(), ".reins");
 }
 
 export function sessionsDir(): string {
-  return join(railguardHome(), "sessions");
+  return join(reinsHome(), "sessions");
 }
 
 export function userPolicyPath(): string {
-  return join(railguardHome(), "policy.yaml");
+  return join(reinsHome(), "policy.yaml");
 }
 
-/** explicit --policy flag wins, then the user's ~/.railguard/policy.yaml,
+/** explicit --policy flag wins, then the user's ~/.reins/policy.yaml,
  *  then the bundled default. */
 export function resolvePolicyPath(explicit?: string): string {
   if (explicit) return explicit;

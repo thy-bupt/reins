@@ -1,10 +1,10 @@
-# railguard
+# reins
 
 **A fail-closed safety rail for AI coding agents.** Declarative policy engine, tamper-evident trace, session replay. Agent-agnostic, local-first, one npm install.
 
 ```bash
-npm i -g railguard
-railguard init claude
+npm i -g reins
+reins init claude
 ```
 
 That's it. Your Claude Code sessions now run behind a policy gate.
@@ -17,32 +17,32 @@ AI coding agents execute shell commands and write files with your permissions. T
 2. **Sandboxes are heavy.** microVM and cloud sandboxes (E2B, microsandbox, gVisor…) are great for isolating *where* code runs, but they don't give you a readable policy or an audit trail, and nobody installs a virtual machine to run `npm test` more safely.
 3. **Nobody keeps the receipts.** When (not if) an agent does something you didn't expect, you want a tamper-evident record of every action it attempted — and a way to answer "would a stricter policy have caught this?"
 
-railguard is the lightweight layer between them: policy + audit + replay, in process, no daemon, no VM.
+reins is the lightweight layer between them: policy + audit + replay, in process, no daemon, no VM.
 
 ## What it does
 
 - **Policy gate** — a YAML file of `allow / ask / deny` rules. Match on program + flags (with combined-short-flag and wrapper-awareness: `rm -fr`, `sudo rm -rf`, `find -exec rm` all resolve to `rm`), on raw regex (catches `curl … | sh`), or on file-path globs (`.env`, `.ssh/`, `.git/`).
-- **Tamper-evident trace** — every decision is appended to a JSONL session file as a SHA-256 hash chain (each record commits to the previous). `railguard trace verify` checks the chain; a hook **refuses to append** to a trace whose chain is broken.
+- **Tamper-evident trace** — every decision is appended to a JSONL session file as a SHA-256 hash chain (each record commits to the previous). `reins trace verify` checks the chain; a hook **refuses to append** to a trace whose chain is broken.
 - **Fail-closed by default** — a malformed hook payload, an unloadable policy, or a tampered trace blocks instead of allowing. The exact opposite of the failure mode in #32990.
-- **Replay** — `railguard replay <session> --policy stricter.yaml` re-evaluates a recorded session against a candidate policy and reports what *would* have been blocked. Nothing is executed.
-- **Doctor** — `railguard doctor` checks policy validity, hook installation, and trace integrity, and tells you when you're running fail-open.
+- **Replay** — `reins replay <session> --policy stricter.yaml` re-evaluates a recorded session against a candidate policy and reports what *would* have been blocked. Nothing is executed.
+- **Doctor** — `reins doctor` checks policy validity, hook installation, and trace integrity, and tells you when you're running fail-open.
 
 ## Supported agents
 
 | agent | install | integration | ask rules |
 | --- | --- | --- | --- |
-| **Claude Code** | `railguard init claude` | `PreToolUse` hook in `~/.claude/settings.json` | ✅ shown to the human via the permission flow |
-| **Gemini CLI** | `railguard init gemini` | `BeforeTool` hook in `~/.gemini/settings.json` | fail closed (deny with reason) |
-| **Codex** | `railguard init codex` | `~/.codex/hooks.json` + `[features] hooks = true` in `config.toml` | fail closed |
-| **Grok Build** | `railguard init grok` | hook file in `~/.grok/hooks/` | fail closed |
-| **opencode** | `railguard init opencode` | plugin in `~/.config/opencode/plugins/` — blocks by throwing | fail closed |
-| **pi** | `railguard init pi` | extension in `~/.pi/agent/extensions/` — blocks via `{ block: true }` | fail closed |
-| **anything else** | `railguard exec -- <cmd>` | generic wrapper for scripts, CI, other agents | fail closed |
+| **Claude Code** | `reins init claude` | `PreToolUse` hook in `~/.claude/settings.json` | ✅ shown to the human via the permission flow |
+| **Gemini CLI** | `reins init gemini` | `BeforeTool` hook in `~/.gemini/settings.json` | fail closed (deny with reason) |
+| **Codex** | `reins init codex` | `~/.codex/hooks.json` + `[features] hooks = true` in `config.toml` | fail closed |
+| **Grok Build** | `reins init grok` | hook file in `~/.grok/hooks/` | fail closed |
+| **opencode** | `reins init opencode` | plugin in `~/.config/opencode/plugins/` — blocks by throwing | fail closed |
+| **pi** | `reins init pi` | extension in `~/.pi/agent/extensions/` — blocks via `{ block: true }` | fail closed |
+| **anything else** | `reins exec -- <cmd>` | generic wrapper for scripts, CI, other agents | fail closed |
 
 Two honest notes: Grok Build itself fails open when a hook crashes or times
 out ([their docs say so](https://docs.x.ai/build/features/hooks)) — our hook
-exits cleanly, but a missing `railguard` binary would let Grok proceed, so run
-`railguard doctor`. And Grok also reads Claude Code's `.claude/settings.json`
+exits cleanly, but a missing `reins` binary would let Grok proceed, so run
+`reins doctor`. And Grok also reads Claude Code's `.claude/settings.json`
 natively, so the claude adapter often covers it for free. Every adapter
 records to the same tamper-evident ledger, tagged per agent
 (`claude-<session>.jsonl`, `grok-<session>.jsonl`, …).
@@ -51,22 +51,22 @@ records to the same tamper-evident ledger, tagged per agent
 
 ```console
 $ echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/important"}}' \
-    | railguard hook claude
-[railguard] blocked by rule "rm-recursive": Recursive deletion is destructive and hard to undo   (exit 2)
+    | reins hook claude
+[reins] blocked by rule "rm-recursive": Recursive deletion is destructive and hard to undo   (exit 2)
 
-$ railguard trace verify
-ok: 47 events, hash chain intact — ~/.railguard/sessions/claude-3f2a….jsonl
+$ reins trace verify
+ok: 47 events, hash chain intact — ~/.reins/sessions/claude-3f2a….jsonl
 
-$ railguard doctor
- ✓ policy       13 rules, default=allow (~/.railguard/policy.yaml)
+$ reins doctor
+ ✓ policy       13 rules, default=allow (~/.reins/policy.yaml)
  ✓ claude-hook  installed in ~/.claude/settings.json
  ✓ traces       1 trace(s) verified, hash chains intact
-railguard looks healthy.
+reins looks healthy.
 ```
 
 ## Writing a policy
 
-`~/.railguard/policy.yaml` (installed by `railguard init`, editable, hot-reloads on every decision):
+`~/.reins/policy.yaml` (installed by `reins init`, editable, hot-reloads on every decision):
 
 ```yaml
 version: 1
@@ -119,14 +119,14 @@ Rules are evaluated in order; **first match wins**. `ask` shows the agent's requ
 
 | command | what it does |
 | --- | --- |
-| `railguard init <agent>` | installs the policy + hook for an agent — `claude`, `gemini`, `codex`, `grok`, `opencode`, `pi` (backs up originals) |
-| `railguard hook <agent>` | hook entrypoint (agents call this; you normally don't) |
-| `railguard exec -- <cmd>` | run any command under the policy — works from scripts, CI, other agents |
-| `railguard trace list` / `trace verify [file]` | list sessions / verify a session's hash chain |
-| `railguard doctor` | full health check: policy, hook, traces |
-| `railguard replay [file] --policy <p>` | re-evaluate a session under another policy, block report |
+| `reins init <agent>` | installs the policy + hook for an agent — `claude`, `gemini`, `codex`, `grok`, `opencode`, `pi` (backs up originals) |
+| `reins hook <agent>` | hook entrypoint (agents call this; you normally don't) |
+| `reins exec -- <cmd>` | run any command under the policy — works from scripts, CI, other agents |
+| `reins trace list` / `trace verify [file]` | list sessions / verify a session's hash chain |
+| `reins doctor` | full health check: policy, hook, traces |
+| `reins replay [file] --policy <p>` | re-evaluate a session under another policy, block report |
 
-Configuration: `RAILGUARD_HOME` overrides `~/.railguard` (sessions + policy live there). `--policy <path>` overrides the policy per invocation.
+Configuration: `REINS_HOME` overrides `~/.reins` (sessions + policy live there). `--policy <path>` overrides the policy per invocation.
 
 ## Architecture
 
@@ -138,9 +138,9 @@ No daemon, no VM, no watcher. One short-lived process per decision:
 └──────────────┬──────────────────────────────────────────────┘
                │ PreToolUse hook: JSON on stdin
                ▼
-        railguard hook claude
+        reins hook claude
                │
-               ├── load policy (~/.railguard/policy.yaml)
+               ├── load policy (~/.reins/policy.yaml)
                ├── parse & match ──► allow │ ask │ deny
                │        (shell-quote segmentation, flag expansion,
                │         wrapper/exec-context detection, path globs)
@@ -157,7 +157,7 @@ No daemon, no VM, no watcher. One short-lived process per decision:
                                  (fed back to the agent)
 ```
 
-`railguard exec` uses the same engine from scripts and CI; `railguard replay` reads the ledger back and re-runs *decisions only* (never commands) under a candidate policy.
+`reins exec` uses the same engine from scripts and CI; `reins replay` reads the ledger back and re-runs *decisions only* (never commands) under a candidate policy.
 
 ## Performance
 
@@ -167,17 +167,17 @@ One decision = one cold Node process: **~40 ms per tool call** on Apple Silicon 
 
 Read this before trusting your machine to any tool, including this one:
 
-- **railguard is not an OS sandbox.** It's a policy and audit layer. A sufficiently creative agent may find command shapes the parser doesn't classify. For hard isolation, pair it with bubblewrap/Seatbelt, a microVM (microsandbox), or [Claude Code sandboxing](https://code.claude.com/docs/en/hooks#sandboxing) — they're complements, not substitutes.
+- **reins is not an OS sandbox.** It's a policy and audit layer. A sufficiently creative agent may find command shapes the parser doesn't classify. For hard isolation, pair it with bubblewrap/Seatbelt, a microVM (microsandbox), or [Claude Code sandboxing](https://code.claude.com/docs/en/hooks#sandboxing) — they're complements, not substitutes.
 - **Command parsing is heuristic.** It handles combined short flags, wrapper binaries (`sudo`, `env`, `xargs`…), absolute program paths, subcommands, and embedded `-exec`-style execution. It does not attempt full shell semantics. The bypass test suite in `test/decider.test.ts` is the contract — PRs that add bypass cases are the most valuable contributions.
-- **The trace is tamper-*evident*, not tamper-*proof*.** An agent (or anything) with filesystem write access to `~/.railguard/sessions` can delete the whole file — the hash chain proves *modification*, not *deletion*. Restrict permissions or ship traces off-box for high-stakes use.
-- **The policy itself is not signed yet.** An agent that can write to `~/.railguard/policy.yaml` can weaken it before doing the thing you wanted to forbid. Policy integrity verification is the top roadmap item; until then, keep `~/.railguard` writable only by you and let `railguard doctor` be part of your routine.
+- **The trace is tamper-*evident*, not tamper-*proof*.** An agent (or anything) with filesystem write access to `~/.reins/sessions` can delete the whole file — the hash chain proves *modification*, not *deletion*. Restrict permissions or ship traces off-box for high-stakes use.
+- **The policy itself is not signed yet.** An agent that can write to `~/.reins/policy.yaml` can weaken it before doing the thing you wanted to forbid. Policy integrity verification is the top roadmap item; until then, keep `~/.reins` writable only by you and let `reins doctor` be part of your routine.
 - macOS and Linux only for now.
 
 ## How it compares
 
-The "make agents safer" niche got crowded in 2025–2026, and that's good. Here is where railguard stands, honestly, against the projects you'll actually cross-shop (data as of 2026-09):
+The "make agents safer" niche got crowded in 2025–2026, and that's good. Here is where reins stands, honestly, against the projects you'll actually cross-shop (data as of 2026-09):
 
-| | **railguard** | [cc-safety-net](https://github.com/kenryu42/cc-safety-net) (1.5k★) | [Claude Code sandboxing](https://code.claude.com/docs/en/sandboxing) (official) | [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) (8.5k★) | [agent-replay](https://github.com/clay-good/agent-replay) (13★) |
+| | **reins** | [cc-safety-net](https://github.com/kenryu42/cc-safety-net) (1.5k★) | [Claude Code sandboxing](https://code.claude.com/docs/en/sandboxing) (official) | [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) (8.5k★) | [agent-replay](https://github.com/clay-good/agent-replay) (13★) |
 | --- | --- | --- | --- | --- | --- |
 | What it is | policy gate + tamper-evident ledger + replay | pre-execution command guard | OS-level fs/network sandbox (Seatbelt/bubblewrap) | container runtime with YAML policy (fs/network/process/credentials) | time-travel debugging of agent runs |
 | Policy file | YAML, hot-reloads | presets + JSON rulebooks + web GUI | sandbox settings | YAML, dynamic parts hot-reload | — |
@@ -191,7 +191,7 @@ The "make agents safer" niche got crowded in 2025–2026, and that's good. Here 
 
 **Where the others lead:** cc-safety-net has far broader agent coverage, a GUI, secret-access blocking that spans read tools, and a real community — for pure "stop the dangerous command" on many agents, it's the established choice. OpenShell and native sandboxing enforce at the kernel level, which no userspace parser can match. agent-replay is the better debugging UX today.
 
-**Where railguard is different:** it's the only one of these whose ledger is *verifiable* (hash-chained, refuses to continue a tampered file), the only one that pairs a policy gate with *replay under a candidate policy*, and the only one whose core answer to "what if the guard breaks" is *block*, not *allow*. Those three properties compose into something none of the others offer end-to-end: **evidence you can trust about what an agent tried to do** — which is what you need for incident review, compliance, and deciding whether to tighten a policy. It also runs alongside all of the above rather than instead of them: sandbox where you can, guard where you must, ledger either way.
+**Where reins is different:** it's the only one of these whose ledger is *verifiable* (hash-chained, refuses to continue a tampered file), the only one that pairs a policy gate with *replay under a candidate policy*, and the only one whose core answer to "what if the guard breaks" is *block*, not *allow*. Those three properties compose into something none of the others offer end-to-end: **evidence you can trust about what an agent tried to do** — which is what you need for incident review, compliance, and deciding whether to tighten a policy. It also runs alongside all of the above rather than instead of them: sandbox where you can, guard where you must, ledger either way.
 
 ## Roadmap
 
@@ -206,19 +206,19 @@ The "make agents safer" niche got crowded in 2025–2026, and that's good. Here 
 ## FAQ
 
 **Another hook tool already exists (cc-safety-net). Why this one?**
-Use both if you like — they compose. cc-safety-net is broader in agent coverage and friendlier out of the box. railguard's reason to exist is the part none of the hook packs offer: a ledger whose integrity you can *verify*, fail-closed semantics when things break, and replaying a real session against a stricter policy before you adopt it.
+Use both if you like — they compose. cc-safety-net is broader in agent coverage and friendlier out of the box. reins's reason to exist is the part none of the hook packs offer: a ledger whose integrity you can *verify*, fail-closed semantics when things break, and replaying a real session against a stricter policy before you adopt it.
 
 **Why not just use Claude Code's built-in sandboxing?**
-You should — they solve different problems and stack cleanly. The sandbox constrains *where code runs* (filesystem/network at the OS level). railguard adds a portable policy with human-readable reasons, a decision ledger that survives tampering, and replay — none of which the sandbox provides, and none of which follow you when you switch agents.
+You should — they solve different problems and stack cleanly. The sandbox constrains *where code runs* (filesystem/network at the OS level). reins adds a portable policy with human-readable reasons, a decision ledger that survives tampering, and replay — none of which the sandbox provides, and none of which follow you when you switch agents.
 
 **Does it slow my agent down?**
 ~40 ms per tool call (measured, see Performance). The commands being vetted usually cost more than that.
 
 **Is the trace a keylogger?**
-No. It records tool name, tool input, the decision, and the reason — no command output, no file contents, no prompts. It stays in `~/.railguard/sessions/` on your machine.
+No. It records tool name, tool input, the decision, and the reason — no command output, no file contents, no prompts. It stays in `~/.reins/sessions/` on your machine.
 
 **What stops the agent from editing `policy.yaml` or its own trace?**
-Tampering with the trace is detected (hash chain) and blocks further logging — that's the fail-closed guarantee. Weakening `policy.yaml` is *not* yet prevented; that's the top roadmap item. Until then, treat `~/.railguard` permissions as part of your setup and run `railguard doctor` occasionally.
+Tampering with the trace is detected (hash chain) and blocks further logging — that's the fail-closed guarantee. Weakening `policy.yaml` is *not* yet prevented; that's the top roadmap item. Until then, treat `~/.reins` permissions as part of your setup and run `reins doctor` occasionally.
 
 **Windows?**
 Not yet — the runner assumes a POSIX shell.

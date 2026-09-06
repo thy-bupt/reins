@@ -20,7 +20,7 @@ rules:
 `);
 
 async function setup() {
-  return TraceWriter.start(await mkdtemp(join(tmpdir(), "railguard-pi-")));
+  return TraceWriter.start(await mkdtemp(join(tmpdir(), "reins-pi-")));
 }
 
 describe("pi payload contract", () => {

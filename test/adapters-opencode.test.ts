@@ -25,7 +25,7 @@ rules:
 `);
 
 async function setup() {
-  return TraceWriter.start(await mkdtemp(join(tmpdir(), "railguard-opencode-")));
+  return TraceWriter.start(await mkdtemp(join(tmpdir(), "reins-opencode-")));
 }
 
 describe("opencode payload contract", () => {
@@ -79,7 +79,7 @@ describe("opencode payload contract", () => {
 });
 
 describe("opencode plugin generator", () => {
-  it("generates a plugin that spawns railguard and throws on deny", () => {
+  it("generates a plugin that spawns reins and throws on deny", () => {
     const source = opencodePluginSource();
     expect(source).toContain("tool.execute.before");
     expect(source).toContain("spawnSync");

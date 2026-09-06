@@ -1,7 +1,7 @@
-# railguard default policy — safe starting point, tune to taste.
+# reins default policy — safe starting point, tune to taste.
 # Schema: version 1. Actions: allow | deny | ask. First matching rule wins.
 version: 1
-name: railguard-default
+name: reins-default
 default: allow
 
 rules:

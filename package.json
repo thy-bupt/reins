@@ -1,5 +1,5 @@
 {
-  "name": "railguard",
+  "name": "reins",
   "version": "0.1.0",
   "description": "Fail-closed safety rail for AI coding agents: declarative policy engine, tamper-evident trace, session replay. Agent-agnostic, local-first.",
   "type": "module",
@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "bin": {
-    "railguard": "dist/cli/main.js"
+    "reins": "dist/cli/main.js"
   },
   "files": [
     "dist",

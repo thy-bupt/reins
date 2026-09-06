@@ -6,7 +6,7 @@ import { readTrace, TraceWriter } from "../src/core/trace.js";
 import { runGuarded } from "../src/core/runner.js";
 
 async function tmpDir() {
-  return mkdtemp(join(tmpdir(), "railguard-runner-test-"));
+  return mkdtemp(join(tmpdir(), "reins-runner-test-"));
 }
 
 describe("runGuarded", () => {

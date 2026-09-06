@@ -20,7 +20,7 @@ rules:
 `);
 
 async function setup() {
-  return TraceWriter.start(await mkdtemp(join(tmpdir(), "railguard-grok-")));
+  return TraceWriter.start(await mkdtemp(join(tmpdir(), "reins-grok-")));
 }
 
 describe("grok hook adapter", () => {
@@ -77,7 +77,7 @@ describe("grok installer", () => {
     expect(typeof hook.timeout).toBe("number");
   });
 
-  it("merges into an existing railguard hooks file without duplicating", () => {
+  it("merges into an existing reins hooks file without duplicating", () => {
     const once = grokHooksFileContent(null);
     const twice = grokHooksFileContent(once);
     const parsed = JSON.parse(twice) as { hooks: { PreToolUse: unknown[] } };
@@ -97,7 +97,7 @@ describe("grok installer", () => {
     expect(hasGrokHook(merged)).toBe(true);
   });
 
-  it("detects absence of railguard in a file", () => {
+  it("detects absence of reins in a file", () => {
     expect(hasGrokHook(JSON.stringify({ hooks: { PreToolUse: [] } }))).toBe(false);
     expect(hasGrokHook(null)).toBe(false);
   });

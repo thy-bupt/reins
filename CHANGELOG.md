@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to railguard are documented here.
+All notable changes to reins are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is SemVer.
 
 ## [Unreleased]
@@ -14,9 +14,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is Se
   - Grok Build — hook file in `~/.grok/hooks/` (camelCase payload)
   - opencode — auto-loaded plugin that blocks by throwing
   - pi — auto-loaded extension using the `tool_call` block contract
-- `railguard init <agent>` and `railguard hook <agent>` accept all adapters;
+- `reins init <agent>` and `reins hook <agent>` accept all adapters;
   ask rules fail closed on agents without an ask channel
-- `railguard doctor` reports per-agent install status (optional agents warn,
+- `reins doctor` reports per-agent install status (optional agents warn,
   never fail)
 
 ## [0.1.0] — 2026-09-06
@@ -37,8 +37,8 @@ Initial release.
   refuse to append to a broken chain (fail closed)
 - **Claude Code adapter** — PreToolUse hook: `deny` ⇒ exit 2 + reason on
   stderr, `ask` ⇒ `permissionDecision` JSON, malformed payloads fail closed;
-  `railguard init claude` installs policy + hook with settings backup
-- **Generic exec wrapper** — `railguard exec -- <cmd>` with the same policy
+  `reins init claude` installs policy + hook with settings backup
+- **Generic exec wrapper** — `reins exec -- <cmd>` with the same policy
   and ledger (works from scripts, CI, any agent)
 - **doctor** — policy validity, hook installation, session/trace integrity,
   PATH check
@@ -48,4 +48,4 @@ Initial release.
 - **Default policy** — 13 rules (recursive deletion, force push, pipe-to-shell,
   fork bomb, mkfs/dd, secrets paths) + bypass-resistance test suite
 
-[0.1.0]: https://github.com/YOUR_USERNAME/railguard/releases/tag/v0.1.0
+[0.1.0]: https://github.com/YOUR_USERNAME/reins/releases/tag/v0.1.0

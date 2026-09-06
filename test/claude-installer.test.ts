@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { RAILGUARD_HOOK_COMMAND, RAILGUARD_HOOK_MATCHER, mergeSettings } from "../src/adapters/claude/installer.js";
+import { REINS_HOOK_COMMAND, REINS_HOOK_MATCHER, mergeSettings } from "../src/adapters/claude/installer.js";
 
 describe("mergeSettings", () => {
-  it("adds a railguard PreToolUse hook entry to empty settings", () => {
+  it("adds a reins PreToolUse hook entry to empty settings", () => {
     const { settings, changed } = mergeSettings({});
     expect(changed).toBe(true);
 
     const hooks = (settings as { hooks: { PreToolUse: Array<Record<string, unknown>> } }).hooks;
     expect(hooks.PreToolUse).toHaveLength(1);
     const entry = hooks.PreToolUse[0]!;
-    expect(entry.matcher).toBe(RAILGUARD_HOOK_MATCHER);
+    expect(entry.matcher).toBe(REINS_HOOK_MATCHER);
     const innerHooks = entry.hooks as Array<{ type: string; command: string }>;
     expect(innerHooks).toHaveLength(1);
-    expect(innerHooks[0]!.command).toBe(RAILGUARD_HOOK_COMMAND);
+    expect(innerHooks[0]!.command).toBe(REINS_HOOK_COMMAND);
     expect(innerHooks[0]!.type).toBe("command");
   });
 
@@ -36,7 +36,7 @@ describe("mergeSettings", () => {
     const pre = (settings as { hooks: { PreToolUse: Array<{ matcher: string }> } }).hooks.PreToolUse;
     expect(pre).toHaveLength(2);
     expect(pre[0]!.matcher).toBe("Write");
-    expect(pre[1]!.matcher).toBe(RAILGUARD_HOOK_MATCHER);
+    expect(pre[1]!.matcher).toBe(REINS_HOOK_MATCHER);
     const post = (settings as { hooks: { PostToolUse: unknown[] } }).hooks.PostToolUse;
     expect(post).toHaveLength(1);
   });

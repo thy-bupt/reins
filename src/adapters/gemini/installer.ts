@@ -1,10 +1,10 @@
 import { mergeHooksEntry } from "../common.js";
 
 export const GEMINI_HOOK_MATCHER = "run_shell_command|write_file|replace";
-export const GEMINI_HOOK_COMMAND = "railguard hook gemini";
+export const GEMINI_HOOK_COMMAND = "reins hook gemini";
 const GEMINI_EVENT = "BeforeTool";
 
-/** Merge the railguard BeforeTool entry into Gemini CLI settings.json. */
+/** Merge the reins BeforeTool entry into Gemini CLI settings.json. */
 export function mergeGeminiSettings(existing: unknown) {
   return mergeHooksEntry(existing, {
     event: GEMINI_EVENT,
