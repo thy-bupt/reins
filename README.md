@@ -183,7 +183,11 @@ its tools** ([GuardAgent, arXiv:2406.09187](https://arxiv.org/abs/2406.09187)),
 and tamper-evidence for everything the agent attempted — the gap that
 [AgentDojo](https://arxiv.org/abs/2406.13352)-style benchmarks leave open.
 Validated end-to-end on a real repository
-([evidence](docs/evidence-v0.2.md)).
+([evidence](docs/evidence-v0.2.md)) **and on a real agent session**: Claude Code
+running with `--dangerously-skip-permissions` in a cloned express repo — the
+agent's `rm -rf` was denied by the hook, the command never executed, and when
+the agent later *claimed* a denial that never happened, the ledger exposed the
+fabrication ([agent evidence](docs/evidence-agent.md)).
 
 ## Honest limitations
 

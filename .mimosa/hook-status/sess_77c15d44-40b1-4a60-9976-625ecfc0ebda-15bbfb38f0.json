@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mimosa-hook-status/v1",
+  "recordedAt": "2026-09-06T15:07:51.937Z",
+  "sessionId": "sess_77c15d44-40b1-4a60-9976-625ecfc0ebda",
+  "event": "PostToolUse",
+  "toolName": "Write",
+  "file": "/tmp/reins-agent-test/express/.mcp.json",
+  "outcome": "inconclusive",
+  "coverage": "partial",
+  "findingCount": 0,
+  "durationMs": 2,
+  "hostState": "hook_complete",
+  "reportHint": ".mimosa/reports/"
+}

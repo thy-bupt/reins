@@ -21,7 +21,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is Se
 - `macos-latest` CI job (the primary dev platform was missing from CI)
 - **Acceptance evidence** — end-to-end validation on a real clone of
   expressjs/express (interception, ledger, snapshot, recovery via
-  `git restore`, MCP query, uninstall): [docs/evidence-v0.2.md](docs/evidence-v0.2.md)
+  `git restore`, MCP query, uninstall): [docs/evidence-v0.2.md](docs/evidence-v0.2.md);
+  plus a real Claude Code session with hooks + MCP live
+  (`--dangerously-skip-permissions`, real `rm -rf` denied, agent's fabricated
+  denial caught by the ledger): [docs/evidence-agent.md](docs/evidence-agent.md)
 - **Operation snapshots** — `reins snapshot` builds a forensic markdown report per session:
   integrity verdict (tampered traces are flagged, not refused), policy sha256
   fingerprint, full decision timeline, git context of touched files (repo, HEAD,
