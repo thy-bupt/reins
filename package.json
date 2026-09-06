@@ -12,7 +12,8 @@
   },
   "files": [
     "dist",
-    "policies"
+    "policies",
+    "skills"
   ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -35,10 +36,12 @@
     "llm"
   ],
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "commander": "^15.0.0",
     "picomatch": "^4.0.7",
     "shell-quote": "^1.10.0",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.0",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -26,6 +26,15 @@ reins is the lightweight layer between them: policy + audit + replay, in process
 - **Fail-closed by default** — a malformed hook payload, an unloadable policy, or a tampered trace blocks instead of allowing. The exact opposite of the failure mode in #32990.
 - **Replay** — `reins replay <session> --policy stricter.yaml` re-evaluates a recorded session against a candidate policy and reports what *would* have been blocked. Nothing is executed.
 - **Doctor** — `reins doctor` checks policy validity, hook installation, and trace integrity, and tells you when you're running fail-open.
+- **MCP server (read-only)** — `reins mcp` exposes `check_command`,
+  `recent_decisions`, `policy_summary` and `stats` to the agent itself: it can
+  self-check proposals before hitting the wall and review its own denials.
+  Cooperative by design — the tools are read-only and the hook re-decides at
+  execution time.
+- **Skills** — `reins init skills` installs two workflow skills:
+  `reins-selfcheck` (how to respond to a denial productively) and
+  `reins-incident` (how to investigate agent activity with trace + snapshot).
+  Advisory only; uninstall cleanly with `reins uninstall skills`.
 - **Operation snapshots** — `reins snapshot` emits a forensic markdown report when you need to look back: hash-chain verdict, policy fingerprint, full decision timeline, the git state of every touched file, and recovery hints (`git restore`, `git reflog`). Works even on tampered traces — evidence preserved, tampering flagged.
 
 ## Supported agents
@@ -163,6 +172,18 @@ No daemon, no VM, no watcher. One short-lived process per decision:
 ## Performance
 
 One decision = one cold Node process: **~40 ms per tool call** on Apple Silicon (measured with the default 13-rule policy, including Node startup, policy load, matching, and trace append). For comparison, the shell command being vetted usually takes an order of magnitude longer.
+
+## Design grounding
+
+reins' core choices line up with the emerging agent-security literature:
+security by **system design rather than model behavior** ([CaMeL,
+arXiv:2503.18813](https://arxiv.org/abs/2503.18813) — the deterministic gate;
+the LLM is never the enforcement layer), a guardrail **between the agent and
+its tools** ([GuardAgent, arXiv:2406.09187](https://arxiv.org/abs/2406.09187)),
+and tamper-evidence for everything the agent attempted — the gap that
+[AgentDojo](https://arxiv.org/abs/2406.13352)-style benchmarks leave open.
+Validated end-to-end on a real repository
+([evidence](docs/evidence-v0.2.md)).
 
 ## Honest limitations
 

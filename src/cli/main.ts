@@ -22,6 +22,8 @@ import {
   removeHooksEntry,
   sessionIdFrom,
 } from "../adapters/common.js";
+import { runMcpServer } from "../mcp/server.js";
+import { SKILL_NAMES, installSkill, uninstallSkill } from "../skills/installer.js";
 import { formatTraceShow } from "./show.js";
 import { formatDoctorReport, runDoctor } from "./doctor.js";
 import { formatReplayReport, replaySession } from "./replay.js";
@@ -103,16 +105,17 @@ program
 
 program
   .command("init")
-  .description(`install the reins hook for a coding agent (${HOOK_ADAPTER_NAMES.join(", ")})`)
-  .argument("<adapter>", `agent adapter: ${HOOK_ADAPTER_NAMES.join(" | ")}`)
+  .description(`install reins for a coding agent (${HOOK_ADAPTER_NAMES.join(", ")}) or component (skills, mcp)`)
+  .argument("<adapter>", `target: ${HOOK_ADAPTER_NAMES.join(" | ")} | skills | mcp`)
   .option("--policy <path>", "policy file to install as your default")
   .option(
     "--settings <path>",
     "agent settings/config file override (where applicable)",
   )
   .action(async (adapter: string, opts: { policy?: string; settings?: string }) => {
-    if (!(adapter in HOOK_ADAPTERS)) {
-      return failClosed(`unknown adapter "${adapter}" (supported: ${HOOK_ADAPTER_NAMES.join(", ")})`);
+    const isHookAdapter = adapter in HOOK_ADAPTERS;
+    if (!isHookAdapter && adapter !== "skills" && adapter !== "mcp") {
+      return failClosed(`unknown adapter "${adapter}" (supported: ${HOOK_ADAPTER_NAMES.join(", ")}, skills, mcp)`);
     }
     await mkdir(sessionsDir(), { recursive: true });
 
@@ -124,6 +127,41 @@ program
       console.log(`policy installed: ${policyDest}`);
     } else {
       console.log(`policy already present, leaving untouched: ${policyDest}`);
+    }
+
+    if (adapter === "skills") {
+      const targetBase = opts.settings ?? join(homedir(), ".claude", "skills");
+      for (const name of SKILL_NAMES) {
+        const r = await installSkill(name, targetBase);
+        console.log(r.changed ? `skill installed: ${r.path}` : `skill already present: ${r.path}`);
+      }
+      console.log("\nrules of engagement: skills are advisory — enforcement still lives in the hooks");
+      return;
+    }
+
+    if (adapter === "mcp") {
+      const cfgPath = opts.settings ?? join(homedir(), ".claude.json");
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(existsSync(cfgPath) ? (await readFile(cfgPath, "utf8")) || "{}" : "{}");
+      } catch {
+        return failClosed(`${cfgPath} is not valid JSON — not touching it`);
+      }
+      const obj = parsed as Record<string, unknown>;
+      const servers = (typeof obj["mcpServers"] === "object" && obj["mcpServers"] !== null
+        ? (obj["mcpServers"] as Record<string, unknown>)
+        : {}) as Record<string, unknown>;
+      const entry = { type: "stdio", command: "reins", args: ["mcp"] };
+      if (JSON.stringify(servers["reins"]) === JSON.stringify(entry)) {
+        console.log(`mcp server already registered in ${cfgPath}`);
+        return;
+      }
+      servers["reins"] = entry;
+      obj["mcpServers"] = servers;
+      await backupOnce(cfgPath);
+      await atomicWrite(cfgPath, JSON.stringify(obj, null, 2) + "\n");
+      console.log(`mcp server registered in ${cfgPath} (restart Claude Code to load)`);
+      return;
     }
 
     switch (adapter as HookAdapterName) {
@@ -430,12 +468,41 @@ trace
 
 program
   .command("uninstall")
-  .description(`remove the reins hook for an agent (${HOOK_ADAPTER_NAMES.join(", ")})`)
-  .argument("<adapter>", `agent adapter: ${HOOK_ADAPTER_NAMES.join(" | ")}`)
+  .description(`remove the reins hook for an agent (${HOOK_ADAPTER_NAMES.join(", ")}) or component (skills, mcp)`)
+  .argument("<adapter>", `target: ${HOOK_ADAPTER_NAMES.join(" | ")} | skills | mcp`)
   .option("--settings <path>", "agent settings/config file override (where applicable)")
   .action(async (adapter: string, opts: { settings?: string }) => {
-    if (!(adapter in HOOK_ADAPTERS)) {
-      return failClosed(`unknown adapter "${adapter}" (supported: ${HOOK_ADAPTER_NAMES.join(", ")})`);
+    const isHookAdapter = adapter in HOOK_ADAPTERS;
+    if (!isHookAdapter && adapter !== "skills" && adapter !== "mcp") {
+      return failClosed(`unknown adapter "${adapter}" (supported: ${HOOK_ADAPTER_NAMES.join(", ")}, skills, mcp)`);
+    }
+    if (adapter === "skills") {
+      const targetBase = opts.settings ?? join(homedir(), ".claude", "skills");
+      for (const name of SKILL_NAMES) {
+        const r = await uninstallSkill(name, targetBase);
+        console.log(r.removed ? `skill removed: ${name}` : `${name}: ${r.reason ?? "not installed"}`);
+      }
+      return;
+    }
+    if (adapter === "mcp") {
+      const cfgPath = opts.settings ?? join(homedir(), ".claude.json");
+      if (!existsSync(cfgPath)) return console.log("not installed (config missing)");
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse((await readFile(cfgPath, "utf8")) || "{}");
+      } catch {
+        return failClosed(`${cfgPath} is not valid JSON — not touching it`);
+      }
+      const obj = parsed as Record<string, unknown>;
+      const servers = (typeof obj["mcpServers"] === "object" && obj["mcpServers"] !== null
+        ? (obj["mcpServers"] as Record<string, unknown>)
+        : {}) as Record<string, unknown>;
+      if (!("reins" in servers)) return console.log(`not installed in ${cfgPath}`);
+      delete servers["reins"];
+      obj["mcpServers"] = servers;
+      await atomicWrite(cfgPath, JSON.stringify(obj, null, 2) + "\n");
+      console.log(`mcp server removed from ${cfgPath}`);
+      return;
     }
 
     const removeFromFile = async (filePath: string, event: string, command: string, kind: string) => {
@@ -530,6 +597,13 @@ policy
     console.log(`reason: ${result.reason ?? "—"}`);
     console.log(`${opts.file ? "path" : "command"}: ${opts.file ?? commandParts.join(" ")}`);
     process.exit(result.decision === "allow" ? 0 : 2);
+  });
+
+program
+  .command("mcp")
+  .description("run the read-only reins MCP server (stdio) — enforcement never lives here")
+  .action(async () => {
+    await runMcpServer();
   });
 
 program.parseAsync(process.argv).catch((err: unknown) => {

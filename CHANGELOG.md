@@ -6,12 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is Se
 ## [Unreleased]
 
 ### Added
+- **MCP server** — `reins mcp` (stdio) exposes read-only tools over the core:
+  `check_command`, `recent_decisions`, `policy_summary`, `stats`; registered
+  into Claude Code with `reins init mcp`. New dependency:
+  `@modelcontextprotocol/sdk`.
+- **Skills** — `reins init skills` installs `reins-selfcheck` and
+  `reins-incident` workflow skills (pure markdown, advisory, cleanly
+  uninstallable); shipped in the npm package under `skills/`.
 - **CLI ergonomics** — `trace show` (human-readable ledger timeline),
   `policy eval` (dry-run a command or file path against the policy, never
   executes; exit code mirrors hook semantics), and `uninstall <agent>` for
   all six adapters (removes only reins entries / marker-verified generated
   files; repurposed files are left alone)
 - `macos-latest` CI job (the primary dev platform was missing from CI)
+- **Acceptance evidence** — end-to-end validation on a real clone of
+  expressjs/express (interception, ledger, snapshot, recovery via
+  `git restore`, MCP query, uninstall): [docs/evidence-v0.2.md](docs/evidence-v0.2.md)
 - **Operation snapshots** — `reins snapshot` builds a forensic markdown report per session:
   integrity verdict (tampered traces are flagged, not refused), policy sha256
   fingerprint, full decision timeline, git context of touched files (repo, HEAD,
