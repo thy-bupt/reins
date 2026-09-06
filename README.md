@@ -44,6 +44,10 @@ reins is the lightweight layer between them: policy + audit + replay, in process
   `reins-selfcheck` (how to respond to a denial productively) and
   `reins-incident` (how to investigate agent activity with trace + snapshot).
   Advisory only; uninstall cleanly with `reins uninstall skills`.
+- **Policy digest binding** — every ledger event records the sha256 of the
+  policy it was decided under; in-session policy changes are flagged as drift
+  and surfaced by `doctor`. (This is policy *fingerprinting* — signing, so
+  that an agent cannot weaken its own policy, is the next milestone.)
 - **Operation snapshots** — `reins snapshot` emits a forensic markdown report when you need to look back: hash-chain verdict, policy fingerprint, full decision timeline, the git state of every touched file, and recovery hints (`git restore`, `git reflog`). Works even on tampered traces — evidence preserved, tampering flagged.
 
 ## Supported agents

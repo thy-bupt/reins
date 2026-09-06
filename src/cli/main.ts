@@ -25,6 +25,9 @@ import {
 } from "../adapters/common.js";
 import { runMcpServer } from "../mcp/server.js";
 import { SKILL_NAMES, installSkill, uninstallSkill } from "../skills/installer.js";
+import { loadLlmConfig } from "../llm/config.js";
+import { runSuggestPipeline } from "../llm/suggest.js";
+import { runExplain } from "../llm/explain.js";
 import { formatTraceShow } from "./show.js";
 import { formatDoctorReport, runDoctor, type DoctorOptions } from "./doctor.js";
 import { formatReplayReport, replaySession } from "./replay.js";
@@ -676,7 +679,11 @@ trace
   .argument("[file]", "trace file (default: newest session)")
   .option("--format <fmt>", "output format: ndjson | json", "ndjson")
   .option("--out <path>", "output file (default: stdout)")
-  .action(async (file: string | undefined, opts: { format: string; out?: string }) => {
+  .option("--no-redact", "export raw commands instead of secret-redacted ones")
+  .action(async (file: string | undefined, opts: { format: string; out?: string; redact: boolean }) => {
+    if (opts.format !== "ndjson" && opts.format !== "json") {
+      return failClosed(`unsupported --format "${opts.format}" (use ndjson or json)`);
+    }
     const target = file ?? (await newestSessionFile());
     if (!target) return failClosed("no session traces found");
     const integrity = await verifyTrace(target);
@@ -688,6 +695,7 @@ trace
       sessionId,
       integrity,
       generatedBy: `reins/${VERSION}`,
+      redact: opts.redact,
     };
     const records = buildEvidenceRecords(events, meta);
     const payload =
@@ -699,6 +707,92 @@ trace
       process.stdout.write(payload);
     }
     if (!integrity.ok) process.exitCode = 1;
+  });
+
+program
+  .command("suggest")
+  .description("optional LLM: propose policy rules from recent ledger patterns — nothing applies without --apply")
+  .option("--session <file>", "analyze a specific session (default: newest 3)")
+  .option("--last <n>", "sessions to analyze", "3")
+  .option("--apply", "merge accepted rules into your policy (backs up first)", false)
+  .option("--policy <path>", "policy file override")
+  .option("--out <path>", "write the proposal report to a file")
+  .action(async (opts: { session?: string; last: string; apply: boolean; policy?: string; out?: string }) => {
+    const cfg = loadLlmConfig();
+    if (cfg.provider === "none") {
+      process.stderr.write(
+        "[reins] LLM is not configured — add an `llm:` section to ~/.reins/config.yaml (see docs/LLM.md). This is optional; reins works fully without it.\n",
+      );
+      process.exit(1);
+    }
+    const policyPath = resolvePolicyPath(opts.policy);
+    const policyText = readFileSync(policyPath, "utf8");
+    const policy = loadPolicy(policyText);
+    const { verdicts } = await runSuggestPipeline(cfg, sessionsDir(), policy, Math.max(1, Number(opts.last) || 3));
+
+    const lines: string[] = [];
+    const accepted = verdicts.filter((v) => v.accepted);
+    for (const v of verdicts) {
+      lines.push(v.accepted ? `✓ accepted: ${v.id} (${v.impact.newBlocks} historical blocks)` : `✗ rejected: ${v.problems.join("; ")}`);
+      if (v.accepted) lines.push(v.yaml);
+    }
+    const report = lines.join("\n");
+    if (opts.out) await writeFile(opts.out, report + "\n", "utf8");
+    else console.log(report + "\n");
+
+    if (accepted.length > 0 && opts.apply) {
+      await backupOnce(policyPath);
+      const merged = policyText.trimEnd() + "\n\n# rules proposed by `reins suggest` (review before keeping)\n" + accepted.map((v) => v.yaml).join("\n") + "\n";
+      await atomicWrite(policyPath, merged);
+      console.log(`applied ${accepted.length} rule(s) to ${policyPath} — policy comments were regenerated; digest changes take effect on the next decision`);
+    } else if (accepted.length > 0) {
+      console.log(`\n${accepted.length} proposal(s) passed verification. Review them and re-run with --apply to add to ${policyPath}.`);
+    } else {
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command("explain")
+  .description("optional LLM: incident narrative from a session snapshot")
+  .argument("[file]", "trace file (default: newest session)")
+  .option("--audience <a>", "dev | audit", "dev")
+  .option("--out <path>", "write the report to a file")
+  .option("--policy <path>", "policy file override")
+  .action(async (file: string | undefined, opts: { audience: string; out?: string; policy?: string }) => {
+    const cfg = loadLlmConfig();
+    if (cfg.provider === "none") {
+      process.stderr.write(
+        "[reins] LLM is not configured — see docs/LLM.md. Optional feature; reins works fully without it.\n",
+      );
+      process.exit(1);
+    }
+    const target = file ?? (await newestSessionFile());
+    if (!target) return failClosed("no session traces found");
+    const events = await readTrace(target);
+    const integrity = await verifyTrace(target);
+    const policyText = readFileSync(resolvePolicyPath(opts.policy), "utf8");
+    const policy = loadPolicy(policyText);
+    const { agent, sessionId } = deriveAgentAndSession(target);
+    const { buildSnapshotMarkdown: bsm } = await import("./snapshot.js");
+    const markdown = bsm({
+      sourceFile: target,
+      agent,
+      sessionId,
+      eventCount: events.length,
+      timeRange: { first: events[0]?.ts, last: events[events.length - 1]?.ts },
+      integrity,
+      policy: { name: policy.name, rules: policy.rules.length, sha256: policySha256(policyText), source: resolvePolicyPath(opts.policy) },
+      git: null,
+      denied: events.filter((e) => e.decision === "deny"),
+      allowed: events.filter((e) => e.decision !== "deny"),
+      fileWrites: [],
+      generatedAt: new Date().toISOString(),
+    });
+    const audienceArg = opts.audience === "audit" ? "audit" : "dev";
+    const report = await runExplain(cfg, markdown, audienceArg);
+    if (opts.out) await writeFile(opts.out, report + "\n", "utf8");
+    else console.log(report);
   });
 
 program.parseAsync(process.argv).catch((err: unknown) => {

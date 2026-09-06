@@ -1,25 +1,48 @@
 import { createHash, randomBytes } from "node:crypto";
-import { appendFile, mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { lstat, mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 const DIR_MODE = 0o700;
 const FILE_MODE = 0o600;
+const LOCK_STALE_MS = 10_000;
+const LOCK_MAX_AGE_MS = 60_000;
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Cross-process advisory lock: concurrent hooks (parallel tool calls of one
  *  agent session) must not interleave appends and break the hash chain.
- *  Stale locks (older than 10s — crashed writer) are stolen. */
+ *  The lock file records `{pid, createdAt, token}`; a lock is only stolen
+ *  when its recorded pid is dead (or the lock is unparseable) after the
+ *  stale window — a slow but live writer never gets its lock snatched. */
 async function withFileLock<T>(lockPath: string, fn: () => Promise<T>): Promise<T> {
-  let startedAt = Date.now();
+  const token = randomBytes(16).toString("hex");
+  const startedAt = Date.now();
   for (;;) {
     let fd;
     try {
       fd = await open(lockPath, "wx", FILE_MODE);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "EEXIST") {
-        if (Date.now() - startedAt > 10_000) {
-          await rm(lockPath, { force: true }); // steal stale lock and retry immediately
-          startedAt = Date.now();
+        let stolen = false;
+        try {
+          const raw = readFileSync(lockPath, "utf8");
+          const parsed = JSON.parse(raw) as { pid: number; createdAt: number };
+          const age = Date.now() - parsed.createdAt;
+          if (age > LOCK_STALE_MS && !pidAlive(parsed.pid)) stolen = true;
+          if (age > LOCK_MAX_AGE_MS) stolen = true;
+        } catch {
+          if (Date.now() - startedAt > LOCK_STALE_MS) stolen = true; // unparseable lock
+        }
+        if (stolen) {
+          await rm(lockPath, { force: true });
           continue;
         }
         await new Promise((resolve) => setTimeout(resolve, 2 + Math.random() * 6));
@@ -28,6 +51,7 @@ async function withFileLock<T>(lockPath: string, fn: () => Promise<T>): Promise<
       throw err;
     }
     try {
+      await fd.writeFile(`${JSON.stringify({ pid: process.pid, createdAt: Date.now(), token })}\n`, "utf8");
       return await fn();
     } finally {
       await fd.close();
@@ -102,9 +126,17 @@ export class TraceWriter {
   }
 
   /** Re-open an existing session file (or create it) and continue its hash
-   *  chain. Refuses to append to a tampered or corrupt trace — fail closed. */
+   *  chain. Refuses to append to a tampered or corrupt trace — fail closed.
+   *  Symlinked session files are rejected (the ledger must stay inside
+   *  sessions/, even if an attacker pre-plants a link). */
   static async open(filePath: string): Promise<TraceWriter> {
     await mkdir(dirname(filePath), { recursive: true, mode: DIR_MODE });
+    if (existsSync(filePath)) {
+      const lst = await lstat(filePath);
+      if (lst.isSymbolicLink()) {
+        throw new CorruptTraceError(`refusing to append: ${filePath} is a symlink`);
+      }
+    }
     if (!existsSync(filePath)) {
       await writeFile(filePath, "", { flag: "w", mode: FILE_MODE });
       return new TraceWriter(filePath, 0, GENESIS_HASH);
@@ -121,10 +153,23 @@ export class TraceWriter {
   }
 
   async append(entry: TraceEntryInput): Promise<TraceEvent> {
-    // re-read and re-verify the chain under the lock: another hook process
-    // may have appended between our open() and this append()
+    // under the lock: re-read, re-verify the FULL chain, then append via an
+    // already-opened file descriptor (symlink re-checked before open — the
+    // ledger may have been tampered with after our open())
     return withFileLock(`${this.filePath}.lock`, async () => {
+      if (existsSync(this.filePath)) {
+        const lst = await lstat(this.filePath);
+        if (lst.isSymbolicLink()) {
+          throw new CorruptTraceError(`refusing to append: ${this.filePath} is a symlink`);
+        }
+      }
       const events = await readTrace(this.filePath);
+      const integrity = verifyEvents(events);
+      if (!integrity.ok) {
+        throw new CorruptTraceError(
+          `refusing to append to a tampered or corrupt trace (${integrity.reason ?? "unknown"} at event ${integrity.brokenAt}): ${this.filePath}`,
+        );
+      }
       const last = events[events.length - 1];
       const seq = last ? last.seq + 1 : 0;
       const prevHash = last ? last.hash : GENESIS_HASH;
@@ -151,7 +196,23 @@ export class TraceWriter {
         prevHash,
       };
       const full: TraceEvent = { ...event, hash: hashEvent(event) };
-      await appendFile(this.filePath, JSON.stringify(full) + "\n", { encoding: "utf8", mode: FILE_MODE });
+
+      // append through an open descriptor; re-check the lstat identity right
+      // before opening to shrink the check-then-use window
+      const lst = await lstat(this.filePath).catch(() => null);
+      if (lst?.isSymbolicLink()) {
+        throw new CorruptTraceError(`refusing to append: ${this.filePath} is a symlink`);
+      }
+      const fh = await open(this.filePath, "a", FILE_MODE);
+      try {
+        const fst = await fh.stat();
+        if (!fst.isFile()) {
+          throw new CorruptTraceError(`refusing to append: ${this.filePath} is not a regular file`);
+        }
+        await fh.writeFile(JSON.stringify(full) + "\n", "utf8");
+      } finally {
+        await fh.close();
+      }
       this.nextSeq = seq + 1;
       this.prevHash = full.hash;
       return full;
@@ -195,16 +256,8 @@ export async function readTrace(filePath: string): Promise<TraceEvent[]> {
   return events;
 }
 
-export async function verifyTrace(filePath: string): Promise<VerifyResult> {
-  let events: TraceEvent[];
-  try {
-    events = await readTrace(filePath);
-  } catch (err) {
-    if (err instanceof CorruptTraceError) {
-      return { ok: false, events: 0, reason: err.message };
-    }
-    throw err;
-  }
+/** Verify an in-memory event list (hash chain, genesis, seq continuity). */
+export function verifyEvents(events: TraceEvent[]): VerifyResult {
   for (let i = 0; i < events.length; i++) {
     const e = events[i]!;
     const expected = hashEvent(e);
@@ -223,4 +276,17 @@ export async function verifyTrace(filePath: string): Promise<VerifyResult> {
     }
   }
   return { ok: true, events: events.length };
+}
+
+export async function verifyTrace(filePath: string): Promise<VerifyResult> {
+  let events: TraceEvent[];
+  try {
+    events = await readTrace(filePath);
+  } catch (err) {
+    if (err instanceof CorruptTraceError) {
+      return { ok: false, events: 0, reason: err.message };
+    }
+    throw err;
+  }
+  return verifyEvents(events);
 }

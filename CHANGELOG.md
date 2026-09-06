@@ -3,95 +3,78 @@
 All notable changes to reins are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is SemVer.
 
-## [Unreleased]
+## [0.3.0] - 2026-09-07
+
+### Added
+- **LLM integration (optional, off by default)** — `reins suggest` (LLM proposes
+  policy rules from ledger deny patterns; every proposal passes schema
+  validation, replay impact analysis and false-positive corpus checks before a
+  human applies it), `reins explain` (incident narrative from a snapshot) and
+  the `suggest_alternative` MCP tool (deterministic alternatives table first,
+  optional LLM fallback, every candidate re-checked by the decider).
+  Providers: `none` (default) / `command` (ollama, any CLI) / `openai`-compatible.
+  Zero new runtime dependencies. See `docs/LLM.md`.
+- **Append-time chain re-verification** — appends now verify the full hash
+  chain inside the lock; a ledger tampered after `open()` is refused instead
+  of being appended to. Lock files carry `{pid, createdAt, token}` and are
+  only stolen when the owning pid is dead (crash-safe, no live-writer snatch).
+- **Symlink defense** — session ledgers that are symlinks are rejected on
+  open and re-checked before every append; appends go through an opened file
+  descriptor. Planted-symlink e2e test included.
+- **Evidence export hardening** — invalid `--format` fails closed (exit 2);
+  per-event `integrity_status` splits `verified_before_break` from
+  `untrusted_after_break` with machine-readable `integrity_reason` and
+  `integrity_broken_at`; commands are secret-redacted by default with
+  `command_digest` preserving evidentiary value (`--no-redact` for raw).
+- **`doctor --all`** — check every adapter without failing on absence.
+- **New tests** — bypass corpus, tamper-then-append regression, planted
+  symlink e2e, 24-concurrent hook e2e, session traversal, privacy redaction,
+  permission preservation, export semantics (240 tests total).
+
+### Fixed
+- grok adapter session naming regression (camelCase session ids fell back to
+  adhoc sessions after the sanitize wiring)
+- session id randomness bumped 24 → 64 bits (Mimosa finding)
+
+## [0.2.0] - 2026-09-07
+
+Evidence MVP / experimental release.
 
 ### Added
 - **Policy digest anchoring** — every ledger event records the sha256 of the
-  policy it was decided under; in-session policy changes are flagged as
-  drift on the event and surfaced by `doctor`
-- **`trace export`** — schema `reins.evidence/v1` (ndjson/json) with
-  integrity_status, ready for CI artifacts and SIEM ingestion
-- **`doctor --all`** — check every adapter without failing on absence
-### Fixed
-- grok adapter session naming regression (camelCase session ids)
-### Added
-- **Security hardening from independent review** — interpreter recursion
-  (`bash -c "…"`), control-flow keywords, `${IFS}` normalization, command
-  substitution (`$(…)`, backticks) and wrapper flag/value handling now all
-  evaluated; cross-process ledger lock (24-concurrent-hook e2e); session_id
-  whitelist + hash fallback (path traversal closed); ledger input whitelist
-  (content stored as sha256, never in plaintext); sessions/trace/policy
-  created 0700/0600; atomic writes preserve file modes; installers refuse to
-  overwrite non-reins files; MCP entry ownership checks; `--agent` for
-  doctor; bypass corpus regression tests from the audit
-- **MCP server** — `reins mcp` (stdio) exposes read-only tools over the core:
-  `check_command`, `recent_decisions`, `policy_summary`, `stats`; registered
-  into Claude Code with `reins init mcp`. New dependency:
-  `@modelcontextprotocol/sdk`.
-- **Skills** — `reins init skills` installs `reins-selfcheck` and
-  `reins-incident` workflow skills (pure markdown, advisory, cleanly
-  uninstallable); shipped in the npm package under `skills/`.
-- **CLI ergonomics** — `trace show` (human-readable ledger timeline),
-  `policy eval` (dry-run a command or file path against the policy, never
-  executes; exit code mirrors hook semantics), and `uninstall <agent>` for
-  all six adapters (removes only reins entries / marker-verified generated
-  files; repurposed files are left alone)
-- `macos-latest` CI job (the primary dev platform was missing from CI)
-- **Acceptance evidence** — end-to-end validation on a real clone of
-  expressjs/express (interception, ledger, snapshot, recovery via
-  `git restore`, MCP query, uninstall): [docs/evidence-v0.2.md](docs/evidence-v0.2.md);
-  plus a real Claude Code session with hooks + MCP live
-  (`--dangerously-skip-permissions`, real `rm -rf` denied, agent's fabricated
-  denial caught by the ledger): [docs/evidence-agent.md](docs/evidence-agent.md)
-- **Operation snapshots** — `reins snapshot` builds a forensic markdown report per session:
-  integrity verdict (tampered traces are flagged, not refused), policy sha256
-  fingerprint, full decision timeline, git context of touched files (repo, HEAD,
-  dirty state, optional `--with-diffs`) and recovery hints (`git restore`,
-  `git reflog`).
-- **Windows support** — cross-platform process layer (`cmd.exe /d /s /c` on
-  win32, `REINS_SHELL` override), backslash-aware path glob matching,
-  platform-aware tests, and a `windows-latest` CI job. Validated end-to-end on
-  real Windows hardware (all 154 tests, including the six-agent matrix).
-- **Multi-agent adapters** with end-to-end matrix tests (init → hook → ledger
-  verify per agent):
-  - Gemini CLI — `BeforeTool` hook in `~/.gemini/settings.json`
-  - Codex — `~/.codex/hooks.json` plus comment-preserving
-    `[features] hooks = true` injection into `config.toml`
-  - Grok Build — hook file in `~/.grok/hooks/` (camelCase payload)
-  - opencode — auto-loaded plugin that blocks by throwing
-  - pi — auto-loaded extension using the `tool_call` block contract
-- `reins init <agent>` and `reins hook <agent>` accept all adapters;
-  ask rules fail closed on agents without an ask channel
-- `reins doctor` reports per-agent install status (optional agents warn,
-  never fail)
+  policy it was decided under; in-session policy changes are flagged as drift
+  on the event and surfaced by `doctor`
+- **`trace export`** — schema `reins.evidence/v1` (ndjson/json)
+- **Multi-agent adapters** — Claude Code, Gemini CLI, Codex, Grok Build,
+  opencode, pi with end-to-end matrix tests; `init/hook/uninstall` for all
+- **CLI ergonomics** — `trace show`, `policy eval` (dry-run),
+  `uninstall <agent>`, `doctor --agent/--all`
+- **Operation snapshots** — `reins snapshot --with-diffs`: forensic markdown
+  report with git correlation and recovery hints
+- **Security hardening from independent review** — wrapper flag/value
+  handling, control-flow keywords, `${IFS}` normalization, command
+  substitution and interpreter recursion evaluated; cross-process ledger
+  lock; session_id whitelist + hash fallback; ledger input whitelist (content
+  stored as sha256, never plaintext); sessions/trace/policy created
+  0700/0600; atomic writes preserve file modes; installers refuse to
+  overwrite non-reins files; MCP entry ownership checks
+- **Acceptance evidence** — real-repo validation
+  ([docs/evidence-v0.2.md](docs/evidence-v0.2.md)) and real Claude Code
+  session validation ([docs/evidence-agent.md](docs/evidence-agent.md))
+- CI: ubuntu (node 20/22/24) + windows-latest + macos-latest + package smoke
 
-## [0.1.0] — 2026-09-06
+## [0.1.0] - 2026-09-06
 
 Initial release.
 
 ### Added
-- **Policy engine** — declarative YAML (`allow` / `ask` / `deny`), rules on:
-  - program + flags with combined-short-flag expansion and wrapper detection
-    (`sudo`, `env`, `xargs`, …), absolute program paths, and subcommands
-    (`git push --force` ⇒ program `git`, subcommand `push`)
-  - exec-context matching (`find -exec rm …`)
-  - raw regex against the command string (`curl … | sh`)
-  - dot-aware path globs for file tools (`.env*`, `.ssh/**`, `.git/**`)
-  - first-match-wins ordering, tool-name scoping, policy-level default
-- **Tamper-evident trace** — append-only JSONL per session, SHA-256 hash chain
-  over every record; `trace verify` reports modification/deletion gaps; hooks
-  refuse to append to a broken chain (fail closed)
-- **Claude Code adapter** — PreToolUse hook: `deny` ⇒ exit 2 + reason on
-  stderr, `ask` ⇒ `permissionDecision` JSON, malformed payloads fail closed;
-  `reins init claude` installs policy + hook with settings backup
-- **Generic exec wrapper** — `reins exec -- <cmd>` with the same policy
-  and ledger (works from scripts, CI, any agent)
-- **doctor** — policy validity, hook installation, session/trace integrity,
-  PATH check
-- **replay** — re-evaluate a recorded session under a candidate policy:
-  would-block / already-blocked / decision-change report, `--strict` gate;
-  refuses tampered traces
-- **Default policy** — 13 rules (recursive deletion, force push, pipe-to-shell,
-  fork bomb, mkfs/dd, secrets paths) + bypass-resistance test suite
+- Policy engine: declarative YAML (`allow`/`ask`/`deny`) with combined-short-
+  flag expansion, wrapper detection, subcommands, exec-context matching, raw
+  regex, dot-aware path globs, first-match-wins ordering
+- Tamper-evident JSONL trace (SHA-256 hash chain, refuse-to-append)
+- Claude Code adapter + generic `exec` wrapper
+- doctor, replay, default policy (13 rules) + bypass-resistance test suite
 
+[0.3.0]: https://github.com/YOUR_USERNAME/reins/releases/tag/v0.3.0
+[0.2.0]: https://github.com/YOUR_USERNAME/reins/releases/tag/v0.2.0
 [0.1.0]: https://github.com/YOUR_USERNAME/reins/releases/tag/v0.1.0

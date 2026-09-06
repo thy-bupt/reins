@@ -44,6 +44,13 @@ export async function runMcpServer(): Promise<void> {
     async () => asText(await handlers.stats()),
   );
 
+  server.tool(
+    "suggest_alternative",
+    "Advisory safer-alternative suggestions for a DENIED command. Read-only; the PreToolUse hook re-decides every candidate.",
+    { command: z.string().describe("the denied command to find alternatives for") },
+    async ({ command }) => asText(await handlers.suggest_alternative({ command })),
+  );
+
   await server.connect(new StdioServerTransport());
   // stdio transport keeps the process alive until the client disconnects
   await new Promise(() => {});

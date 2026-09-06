@@ -70,6 +70,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: npm pack --pack-destination /tmp
-      - run: npm install -g /tmp/reins-0.2.0.tgz
+      - run: npm install -g /tmp/reins-*.tgz
       - run: reins --version
       - run: reins policy eval "npm test"

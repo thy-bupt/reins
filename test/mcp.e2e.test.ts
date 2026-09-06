@@ -38,11 +38,11 @@ afterAll(async () => {
 });
 
 describe.skipIf(!cli)("reins mcp server (protocol e2e)", () => {
-  it("handshakes and exposes exactly the four read-only tools", async () => {
+  it("handshakes and exposes exactly the five read-only tools", async () => {
     const c = await getClient();
     const tools = await c.listTools();
     const names = tools.tools.map((t) => t.name).sort();
-    expect(names).toEqual(["check_command", "policy_summary", "recent_decisions", "stats"]);
+    expect(names).toEqual(["check_command", "policy_summary", "recent_decisions", "stats", "suggest_alternative"]);
   });
 
   it("check_command previews a denial over the wire", async () => {

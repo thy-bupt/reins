@@ -6,6 +6,7 @@ import { hasReinsHook } from "../adapters/claude/installer.js";
 import { hasGeminiHook } from "../adapters/gemini/installer.js";
 import { hasGrokHook } from "../adapters/grok/installer.js";
 import { hasCodexHook, configTomlHasHooksEnabled } from "../adapters/codex/installer.js";
+import { loadLlmConfig } from "../llm/config.js";
 import { loadPolicy, PolicyError } from "../core/policy.js";
 import { readTrace, verifyTrace } from "../core/trace.js";
 
@@ -215,6 +216,20 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
     }
   } else {
     checks.push({ name: "traces", status: "ok", detail: "nothing to verify yet" });
+  }
+
+  // 5b. optional LLM (informational)
+  try {
+    const llmCfg = loadLlmConfig(
+      process.env["REINS_HOME"] ? join(process.env["REINS_HOME"], "config.yaml") : undefined,
+    );
+    checks.push({
+      name: "llm",
+      status: "ok",
+      detail: llmCfg.provider === "none" ? "not configured (optional feature — docs/LLM.md)" : `provider: ${llmCfg.provider}`,
+    });
+  } catch (err) {
+    checks.push({ name: "llm", status: "warn", detail: `config invalid: ${String(err)}` });
   }
 
   // 6. binary on PATH

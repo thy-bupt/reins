@@ -33,6 +33,9 @@ policy 签名、GitHub Action 见路线图。
 | 通用包装 | `exec -- <cmd>` | 任何脚本/CI 可用 |
 | 防篡改账本 | `trace list/verify/show` | JSONL + SHA-256 哈希链；断链拒写（fail-closed） |
 | 政策复盘 | `replay --policy <p>` | 用候选策略重演历史判决（绝不执行） |
+| 策略指纹 | 每个事件 | policyDigest 锚定 + 会话内漂移检测（doctor 检出） |
+| 证据导出 | `trace export` | schema `reins.evidence/v1`（ndjson/json），命令默认脱敏 + digest |
+| LLM（可选） | `suggest` / `explain` / MCP `suggest_alternative` | 默认关闭；提议必过确定性验证；见 docs/LLM.md |
 | 取证快照 | `snapshot --with-diffs` | Markdown 卷宗：完整性 + 时间线 + git 关联 + 恢复指引 |
 | 证据导出 | `trace export` | schema `reins.evidence/v1`（ndjson/json），含 policy_digest 与 integrity_status |
 | 策略指纹 | 每个事件 | policyDigest 锚定判决所用的策略版本；会话内漂移自动标记并被 doctor 检出 |
@@ -54,14 +57,17 @@ src/cli/       人类管理面（main / doctor / replay / snapshot / show）
 
 ## 4. 质量状态
 
-- **225 个测试全绿（v0.2.0）**（macOS 本机），含：绕过攻击测试集（`rm -fr`/`sudo`/`find -exec`/
+- **255 个测试全绿（v0.3.0）**（macOS 本机），含：绕过攻击测试集（`rm -fr`/`sudo`/`find -exec`/
   多行/管道等变体）、误报防御（`echo "rm -rf"` 必须放行）、六 agent 矩阵 e2e（真实
   dist 二进制走 stdin）、MCP 协议级 e2e（SDK 客户端全握手）
 - CI：ubuntu (node 20/22/24) + windows-latest + macos-latest
 - 平台实测：macOS ✅ 全量 · Windows ✅ 真机 154/154（v0.2 新增项待复验）· Linux 覆盖于 CI
 - 真实 agent 实测：Claude Code 2.1.263 headless，真实 `rm -rf` 被拦、MCP 工具被 agent
   亲自调用、agent 幻觉被账本揭穿（`docs/evidence-agent.md`）
-- 独立安全评审（Codex）发现的 4 个发布阻断项已修复并有回归测试：
+- 独立安全评审（Codex）两轮意见已处理：第一轮 4 个发布阻断项（shell 绕过/并发/
+  穿越/打包）+ 第二轮 2 个新 P0（追加时二次验证、symlink 防护）均已修复并有回归测试；
+  LLM 集成为默认关闭的可选功能（`docs/LLM.md`，方案 `docs/llm-plan.md`）：
+  - 独立安全评审（Codex）发现的 4 个发布阻断项已修复并有回归测试：
   shell 间接执行绕过（`bash -c`/控制流/`${IFS}`/`$(...)`/wrapper 旗标）、
   并发账本哈希链损坏（跨进程文件锁 + 24 并发 e2e）、session_id 路径穿越
   （白名单 + 哈希兜底）、trace 隐私（输入白名单，正文只存 sha256）
@@ -70,7 +76,7 @@ src/cli/       人类管理面（main / doctor / replay / snapshot / show）
 ## 5. 依赖与体积
 
 - 运行时依赖 6 个：commander / yaml / picomatch / shell-quote / zod / @modelcontextprotocol/sdk
-- 版本 0.2.0；`prepack` 钩子保证 npm tarball 一定包含 dist（CI 有 clean-package 冒烟）
+- 版本 0.3.0；`prepack` 钩子保证 npm tarball 一定包含 dist（CI 有 clean-package 冒烟）
 - hook 单次决策 ~40ms（冷 Node 进程，含启动/策略加载/匹配/记账）
 - 安装：`npm i -g reins`（或 `npx reins@latest`）
 

@@ -1,6 +1,6 @@
 {
   "name": "reins",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Fail-closed safety rail for AI coding agents: declarative policy engine, tamper-evident trace, session replay. Agent-agnostic, local-first.",
   "type": "module",
   "license": "Apache-2.0",

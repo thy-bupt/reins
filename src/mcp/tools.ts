@@ -4,11 +4,50 @@ import { join } from "node:path";
 import { decide } from "../core/decider.js";
 import { loadPolicy } from "../core/policy.js";
 import { readTrace, verifyTrace } from "../core/trace.js";
+import { DEFAULT_LLM_CONFIG, type LlmConfig } from "../llm/config.js";
+import { completePrompt } from "../llm/provider.js";
 
 export interface McpContext {
   policyPath: string;
   sessionsDir: string;
+  /** optional LLM provider — read-only advisory tools only, never enforcement */
+  llmConfig?: LlmConfig;
 }
+
+/** deterministic safer-alternative table: covers the most common denials
+ *  without any LLM. advisory only — the hook re-decides every candidate. */
+const ALTERNATIVE_TABLE: Array<{ match: RegExp; alternatives: string[]; note: string }> = [
+  {
+    match: /\bgit\s+push\b[^|]*?(--force\b|\s-f\b)/,
+    alternatives: ["git push --force-with-lease"],
+    note: "force-with-lease refuses when the remote moved since your last fetch",
+  },
+  {
+    match: /^rm\s+(-\w*r\w*f?|--recursive)\b/,
+    alternatives: ["move the target to a trash directory instead: mkdir -p .trash && mv <target> .trash/", "delete one specific file: rm <file>"],
+    note: "recursive deletion — narrow the target or keep it recoverable",
+  },
+  {
+    match: /\bchmod\s+777\b/,
+    alternatives: ["chmod 755 <path>", "grant only the needed bit, e.g. chmod +x <path>"],
+    note: "world-writable files are a common attack vector",
+  },
+  {
+    match: /\bgit\s+reset\s+--hard\b/,
+    alternatives: ["git stash push --include-untracked", "git restore -- <paths>"],
+    note: "stash keeps the work recoverable",
+  },
+  {
+    match: /\bcurl\b[^|]*\|\s*(?:ba|z|da)?sh\b/,
+    alternatives: ["download to a file, inspect the script, then run it explicitly"],
+    note: "never execute unreviewed downloaded code",
+  },
+  {
+    match: /\bgit\s+clean\s+-[a-zA-Z]*f/,
+    alternatives: ["git clean -n (dry run) first, then git clean -f on reviewed paths"],
+    note: "dry-run before deleting untracked files",
+  },
+];
 
 interface SessionFile {
   path: string;
@@ -43,6 +82,7 @@ async function newestSessionFiles(sessionsDir: string, count: number): Promise<S
  *  cooperative (agent-initiated) and must never gain enforcement powers. */
 export function createToolHandlers(ctx: McpContext) {
   const loadInstalledPolicy = () => loadPolicy(readFileSync(ctx.policyPath, "utf8"));
+  const llm = ctx.llmConfig ?? DEFAULT_LLM_CONFIG;
 
   return {
     /** Dry-run a command against the installed policy. The hook still decides
@@ -160,6 +200,65 @@ export function createToolHandlers(ctx: McpContext) {
         tamperedSessions,
         tamperedFiles: tamperedFiles.length > 0 ? tamperedFiles : undefined,
       };
+    },
+
+    /** Advisory safer-alternative suggestions for a denied command.
+     *  Layer 1: deterministic table. Layer 2 (optional): LLM, with every
+     *  candidate re-checked against the policy — the hook re-decides regardless. */
+    async suggest_alternative(args: { command: string }) {
+      const table = ALTERNATIVE_TABLE.find((a) => a.match.test(args.command));
+      if (table) {
+        return {
+          command: args.command,
+          source: "deterministic",
+          alternatives: table.alternatives,
+          note: table.note,
+          llmUsed: false,
+        };
+      }
+      if (llm.provider === "none") {
+        return {
+          command: args.command,
+          source: "none",
+          alternatives: [],
+          note: "no deterministic alternative; configure the optional llm: section (docs/LLM.md) for AI suggestions",
+          llmUsed: false,
+        };
+      }
+      try {
+        const prompt = [
+          "A security policy denied this AI-agent command:",
+          args.command,
+          'Propose up to 3 safer alternative commands that accomplish a similar goal. STRICT JSON only:',
+          '{"alternatives":["command one","command two"]}',
+        ].join("\n");
+        const out = await completePrompt(prompt, llm);
+        const jsonMatch = out.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : "{}") as { alternatives?: unknown };
+        const candidates = Array.isArray(parsed.alternatives)
+          ? parsed.alternatives.filter((c): c is string => typeof c === "string")
+          : [];
+        const policy = loadInstalledPolicy();
+        const allowed = candidates.filter(
+          (c) => decide(policy, { tool: "Bash", input: { command: c } }).decision === "allow",
+        );
+        return {
+          command: args.command,
+          source: "llm",
+          alternatives: allowed,
+          rejectedByPolicy: candidates.length - allowed.length,
+          note: "advisory only — the PreToolUse hook re-decides at execution time",
+          llmUsed: true,
+        };
+      } catch (err) {
+        return {
+          command: args.command,
+          source: "llm-error",
+          alternatives: [],
+          note: `LLM suggestion failed: ${err instanceof Error ? err.message : String(err)} — the denial still stands`,
+          llmUsed: true,
+        };
+      }
     },
   };
 }
