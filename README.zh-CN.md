@@ -94,7 +94,7 @@ rules:
 - **不是 OS 级沙箱**：是策略与审计层。要硬隔离请与 bubblewrap / microsandbox / Claude Code sandboxing 叠加使用，它们是互补关系。
 - **命令解析是启发式的**：覆盖组合旗标、包装命令、绝对路径、子命令、`-exec` 内嵌执行，但不做完整 shell 语义。绕过测试集（`test/decider.test.ts`）就是契约——提交新的绕过用例是最有价值的贡献。
 - **追踪是防篡改可证（tamper-evident）而非防篡改（tamper-proof）**：有文件系统写权限的人可以整文件删除；哈希链证明的是"被改过"，不是"没被删"。
-- 目前支持 macOS / Linux。
+- **Windows 已支持**（真机验证 + windows-latest CI）。进程层默认用 `cmd.exe` 承载命令，设 `REINS_SHELL` 指向 `pwsh.exe` 可换 PowerShell 语义。
 
 ## License
 

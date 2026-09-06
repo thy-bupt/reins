@@ -6,6 +6,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is Se
 ## [Unreleased]
 
 ### Added
+- **Windows support** — cross-platform process layer (`cmd.exe /d /s /c` on
+  win32, `REINS_SHELL` override), backslash-aware path glob matching,
+  platform-aware tests, and a `windows-latest` CI job. Validated end-to-end on
+  real Windows hardware (all 154 tests, including the six-agent matrix).
 - **Multi-agent adapters** with end-to-end matrix tests (init → hook → ledger
   verify per agent):
   - Gemini CLI — `BeforeTool` hook in `~/.gemini/settings.json`

@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { TraceWriter, readTrace, verifyTrace } from "../src/core/trace.js";
 async function tmpDir() {
@@ -37,7 +37,9 @@ describe("TraceWriter", () => {
     const trace = await TraceWriter.start(dir);
     await trace.append({ tool: "bash", input: { command: "ls" }, decision: "allow" });
     expect(trace.filePath).toMatch(/\.jsonl$/);
-    expect(trace.filePath).not.toMatch(/:/);
+    // the session id must be filesystem-safe: no colon (illegal on macOS).
+    // On Windows the drive prefix ("C:") legitimately has one — basename only.
+    expect(basename(trace.filePath)).not.toMatch(/:/);
   });
 
   it("records matchedRule and keeps it inside the hash", async () => {
