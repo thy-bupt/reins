@@ -7,19 +7,18 @@ import {
 } from "../common.js";
 
 /**
- * Claude Code PreToolUse hook handler. Protocol:
- *  - deny  -> exit code 2, reason on stderr (fed back to the agent)
- *  - ask   -> exit 0 + JSON permissionDecision on stdout
- *  - allow -> exit 0, silent
- * Malformed payloads fail closed: exit 2.
+ * Gemini CLI BeforeTool hook handler. The payload shape is the same
+ * snake_case JSON as Claude Code (tool_name / tool_input), and exit code 2
+ * blocks with stderr as the rejection reason. There is no documented "ask"
+ * channel, so ask rules fail closed with the reason on stderr.
  */
-export async function handlePreToolUse(
+export async function handleBeforeTool(
   payload: unknown,
   opts: { policy: Policy; trace: TraceWriter },
 ): Promise<HookOutcome> {
   return runAdapterHook(normalizeSnakeCasePayload(payload), {
     policy: opts.policy,
     trace: opts.trace,
-    channel: "claude",
+    channel: "gemini",
   });
 }

@@ -22,6 +22,20 @@ railguard 就是补在中间的轻量层：**策略 + 审计 + 回放**，进程
 - **回放**：`railguard replay <session> --policy 更严的.yaml` 用候选策略重放历史会话，报告"哪些会被拦"，不执行任何东西。
 - **体检**：`railguard doctor` 检查策略、hook 安装、追踪完整性，发现失效放行会明确告诉你。
 
+## 支持的 agent
+
+| agent | 安装 | 集成方式 | ask 规则 |
+| --- | --- | --- | --- |
+| Claude Code | `railguard init claude` | settings.json 的 PreToolUse hook | ✅ 交还给人 |
+| Gemini CLI | `railguard init gemini` | settings.json 的 BeforeTool hook | fail closed |
+| Codex | `railguard init codex` | hooks.json + config.toml feature 开关 | fail closed |
+| Grok Build | `railguard init grok` | ~/.grok/hooks/ 下的 hook 文件 | fail closed |
+| opencode | `railguard init opencode` | 自动加载的插件（抛错阻断） | fail closed |
+| pi | `railguard init pi` | 自动加载的扩展（{block:true} 阻断） | fail closed |
+| 其他一切 | `railguard exec -- <cmd>` | 通用包装器 | fail closed |
+
+每个适配器都写入同一本防篡改账本（按 agent 分文件）。
+
 ## 快速开始
 
 ```bash

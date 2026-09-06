@@ -5,8 +5,19 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { Command } from "commander";
-import { handlePreToolUse } from "../adapters/claude/hook.js";
-import { mergeSettings } from "../adapters/claude/installer.js";
+import { handlePreToolUse as handleClaude } from "../adapters/claude/hook.js";
+import { mergeSettings as mergeClaudeSettings } from "../adapters/claude/installer.js";
+import { handleBeforeTool as handleGemini } from "../adapters/gemini/hook.js";
+import { mergeGeminiSettings } from "../adapters/gemini/installer.js";
+import { handlePreToolUse as handleGrok } from "../adapters/grok/hook.js";
+import { grokHooksFileContent } from "../adapters/grok/installer.js";
+import { handlePreToolUse as handleCodex } from "../adapters/codex/hook.js";
+import { codexHooksFileContent, ensureHooksFeature } from "../adapters/codex/installer.js";
+import { handleToolExecute as handleOpenCode } from "../adapters/opencode/hook.js";
+import { opencodePluginSource } from "../adapters/opencode/installer.js";
+import { handleToolCall as handlePi } from "../adapters/pi/hook.js";
+import { piExtensionSource } from "../adapters/pi/installer.js";
+import { sessionIdFrom } from "../adapters/common.js";
 import { formatDoctorReport, runDoctor } from "./doctor.js";
 import { formatReplayReport, replaySession } from "./replay.js";
 import {
@@ -24,6 +35,18 @@ import { readTrace, TraceWriter, verifyTrace } from "../core/trace.js";
 const require = createRequire(import.meta.url);
 const VERSION: string = require("../../package.json").version;
 
+const HOOK_ADAPTERS = {
+  claude: handleClaude,
+  gemini: handleGemini,
+  grok: handleGrok,
+  codex: handleCodex,
+  opencode: handleOpenCode,
+  pi: handlePi,
+} as const;
+
+type HookAdapterName = keyof typeof HOOK_ADAPTERS;
+const HOOK_ADAPTER_NAMES = Object.keys(HOOK_ADAPTERS) as HookAdapterName[];
+
 async function readAllStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
@@ -35,6 +58,11 @@ async function atomicWrite(filePath: string, content: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true });
   await writeFile(tmp, content, "utf8");
   await rename(tmp, filePath);
+}
+
+async function backupOnce(filePath: string): Promise<void> {
+  const backup = `${filePath}.railguard-backup`;
+  if (existsSync(filePath) && !existsSync(backup)) await copyFile(filePath, backup);
 }
 
 async function failClosed(message: string): Promise<never> {
@@ -53,6 +81,12 @@ async function newestSessionFile(): Promise<string | null> {
   return join(sessionsDir(), withTimes[0]!.f);
 }
 
+async function readJsonFile(filePath: string): Promise<unknown> {
+  if (!existsSync(filePath)) return {};
+  const raw = await readFile(filePath, "utf8");
+  return JSON.parse(raw || "{}");
+}
+
 const program = new Command();
 program
   .name("railguard")
@@ -63,13 +97,16 @@ program
 
 program
   .command("init")
-  .description("install the railguard hook for a coding agent")
-  .argument("<adapter>", "agent adapter: claude")
+  .description(`install the railguard hook for a coding agent (${HOOK_ADAPTER_NAMES.join(", ")})`)
+  .argument("<adapter>", `agent adapter: ${HOOK_ADAPTER_NAMES.join(" | ")}`)
   .option("--policy <path>", "policy file to install as your default")
-  .option("--settings <path>", "agent settings file", join(homedir(), ".claude", "settings.json"))
-  .action(async (adapter: string, opts: { policy?: string; settings: string }) => {
-    if (adapter !== "claude") {
-      return failClosed(`unknown adapter "${adapter}" (supported: claude)`);
+  .option(
+    "--settings <path>",
+    "agent settings/config file override (where applicable)",
+  )
+  .action(async (adapter: string, opts: { policy?: string; settings?: string }) => {
+    if (!(adapter in HOOK_ADAPTERS)) {
+      return failClosed(`unknown adapter "${adapter}" (supported: ${HOOK_ADAPTER_NAMES.join(", ")})`);
     }
     await mkdir(sessionsDir(), { recursive: true });
 
@@ -83,36 +120,114 @@ program
       console.log(`policy already present, leaving untouched: ${policyDest}`);
     }
 
-    const settingsPath = opts.settings;
-    const raw = existsSync(settingsPath) ? await readFile(settingsPath, "utf8") : "{}";
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw || "{}");
-    } catch {
-      return failClosed(`${settingsPath} is not valid JSON — not touching it`);
-    }
-    const { settings, changed } = mergeSettings(parsed);
-    if (changed) {
-      if (existsSync(settingsPath)) {
-        const backup = `${settingsPath}.railguard-backup`;
-        if (!existsSync(backup)) await copyFile(settingsPath, backup);
+    switch (adapter as HookAdapterName) {
+      case "claude": {
+        const settingsPath = opts.settings ?? join(homedir(), ".claude", "settings.json");
+        let parsed: unknown;
+        try {
+          parsed = await readJsonFile(settingsPath);
+        } catch {
+          return failClosed(`${settingsPath} is not valid JSON — not touching it`);
+        }
+        const { settings, changed } = mergeClaudeSettings(parsed);
+        if (changed) {
+          await backupOnce(settingsPath);
+          await atomicWrite(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+          console.log(`hook installed in ${settingsPath} (backup written alongside)`);
+        } else {
+          console.log(`hook already installed in ${settingsPath}`);
+        }
+        break;
       }
-      await atomicWrite(settingsPath, JSON.stringify(settings, null, 2) + "\n");
-      console.log(`hook installed in ${settingsPath} (backup written alongside)`);
-    } else {
-      console.log(`hook already installed in ${settingsPath}`);
+
+      case "gemini": {
+        const settingsPath = opts.settings ?? join(homedir(), ".gemini", "settings.json");
+        let parsed: unknown;
+        try {
+          parsed = await readJsonFile(settingsPath);
+        } catch {
+          return failClosed(`${settingsPath} is not valid JSON — not touching it`);
+        }
+        const { settings, changed } = mergeGeminiSettings(parsed);
+        if (changed) {
+          await backupOnce(settingsPath);
+          await atomicWrite(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+          console.log(`hook installed in ${settingsPath} (backup written alongside)`);
+        } else {
+          console.log(`hook already installed in ${settingsPath}`);
+        }
+        break;
+      }
+
+      case "grok": {
+        const hooksPath = opts.settings ?? join(homedir(), ".grok", "hooks", "railguard.json");
+        const existing = existsSync(hooksPath) ? await readFile(hooksPath, "utf8") : null;
+        const content = grokHooksFileContent(existing);
+        if (existing !== null && content === existing) {
+          console.log(`hook already installed in ${hooksPath}`);
+          break;
+        }
+        await backupOnce(hooksPath);
+        await atomicWrite(hooksPath, content);
+        console.log(`hook installed in ${hooksPath}`);
+        break;
+      }
+
+      case "codex": {
+        // config.toml lives next to hooks.json (both in CODEX_HOME); deriving
+        // it from the hooks path keeps --settings overrides self-contained
+        const hooksPath = opts.settings ?? join(homedir(), ".codex", "hooks.json");
+        const configPath = join(dirname(hooksPath), "config.toml");
+        const existingHooks = existsSync(hooksPath) ? await readFile(hooksPath, "utf8") : null;
+        const hooksContent = codexHooksFileContent(existingHooks);
+        if (existingHooks === null || hooksContent !== existingHooks) {
+          await backupOnce(hooksPath);
+          await atomicWrite(hooksPath, hooksContent);
+          console.log(`hook installed in ${hooksPath}`);
+        } else {
+          console.log(`hook already installed in ${hooksPath}`);
+        }
+
+        const configToml = existsSync(configPath) ? await readFile(configPath, "utf8") : null;
+        const { content, changed } = ensureHooksFeature(configToml);
+        if (changed) {
+          await backupOnce(configPath);
+          await atomicWrite(configPath, content);
+          console.log(`feature enabled in ${configPath} ([features] hooks = true)`);
+        } else {
+          console.log(`feature already enabled in ${configPath}`);
+        }
+        break;
+      }
+
+      case "opencode": {
+        const pluginPath =
+          opts.settings ?? join(homedir(), ".config", "opencode", "plugins", "railguard.js");
+        await atomicWrite(pluginPath, opencodePluginSource());
+        console.log(`plugin installed in ${pluginPath}`);
+        break;
+      }
+
+      case "pi": {
+        const extPath = opts.settings ?? join(homedir(), ".pi", "agent", "extensions", "railguard.ts");
+        await atomicWrite(extPath, piExtensionSource());
+        console.log(`extension installed in ${extPath}`);
+        break;
+      }
     }
+
     console.log("\nrailguard is live. Try: railguard trace list");
   });
 
 program
   .command("hook")
-  .description("agent hook entrypoint (reads the hook payload on stdin)")
-  .argument("<adapter>", "agent adapter: claude")
+  .description(`agent hook entrypoint (${HOOK_ADAPTER_NAMES.join(", ")})`)
+  .argument("<adapter>", `agent adapter: ${HOOK_ADAPTER_NAMES.join(" | ")}`)
   .option("--policy <path>", "policy file override")
   .action(async (adapter: string, opts: { policy?: string }) => {
-    if (adapter !== "claude") {
-      return failClosed(`unknown adapter "${adapter}" (supported: claude)`);
+    const handler = HOOK_ADAPTERS[adapter as HookAdapterName];
+    if (!handler) {
+      return failClosed(`unknown adapter "${adapter}" (supported: ${HOOK_ADAPTER_NAMES.join(", ")})`);
     }
     let raw: string;
     try {
@@ -124,13 +239,9 @@ program
     try {
       const payload: unknown = raw.trim() === "" ? null : JSON.parse(raw);
       const policy = loadPolicy(readFileSync(resolvePolicyPath(opts.policy), "utf8"));
-      const maybeSession = (payload as Record<string, unknown> | null)?.["session_id"];
-      const sessionId =
-        typeof maybeSession === "string" && maybeSession.trim() !== ""
-          ? maybeSession
-          : `adhoc-${new Date().toISOString().replace(/[:.]/g, "-")}`;
-      const trace = await TraceWriter.open(join(sessionsDir(), `claude-${sessionId}.jsonl`));
-      const outcome = await handlePreToolUse(payload, { policy, trace });
+      const sessionId = sessionIdFrom(payload, adapter);
+      const trace = await TraceWriter.open(join(sessionsDir(), `${adapter}-${sessionId}.jsonl`));
+      const outcome = await handler(payload, { policy, trace });
       if (outcome.stdout) process.stdout.write(outcome.stdout);
       if (outcome.stderr) process.stderr.write(outcome.stderr + "\n");
       process.exit(outcome.exitCode);
@@ -202,13 +313,21 @@ program
   .command("doctor")
   .description("check that the rail is installed, intact, and tamper-free")
   .option("--home <dir>", "railguard home", railguardHome())
-  .option("--settings <path>", "agent settings file", join(homedir(), ".claude", "settings.json"))
+  .option("--settings <path>", "Claude Code settings file", join(homedir(), ".claude", "settings.json"))
   .option("--no-path-check", "skip checking whether railguard is on PATH")
   .action(async (opts: { home: string; settings: string; pathCheck: boolean }) => {
     const report = await runDoctor({
       home: opts.home,
       settingsPath: opts.settings,
       checkPath: opts.pathCheck,
+      agentPaths: {
+        gemini: join(homedir(), ".gemini", "settings.json"),
+        grok: join(homedir(), ".grok", "hooks", "railguard.json"),
+        codexHooks: join(homedir(), ".codex", "hooks.json"),
+        codexConfig: join(homedir(), ".codex", "config.toml"),
+        opencode: join(homedir(), ".config", "opencode", "plugins", "railguard.js"),
+        pi: join(homedir(), ".pi", "agent", "extensions", "railguard.ts"),
+      },
     });
     console.log(formatDoctorReport(report));
     if (!report.healthy) process.exit(1);

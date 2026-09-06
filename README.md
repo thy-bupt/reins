@@ -27,7 +27,25 @@ railguard is the lightweight layer between them: policy + audit + replay, in pro
 - **Replay** — `railguard replay <session> --policy stricter.yaml` re-evaluates a recorded session against a candidate policy and reports what *would* have been blocked. Nothing is executed.
 - **Doctor** — `railguard doctor` checks policy validity, hook installation, and trace integrity, and tells you when you're running fail-open.
 
-Works with any agent that has hooks or a shell: first-class [Claude Code](https://code.claude.com/docs/en/hooks) support today; the generic `railguard exec` wrapper works with everything else.
+## Supported agents
+
+| agent | install | integration | ask rules |
+| --- | --- | --- | --- |
+| **Claude Code** | `railguard init claude` | `PreToolUse` hook in `~/.claude/settings.json` | ✅ shown to the human via the permission flow |
+| **Gemini CLI** | `railguard init gemini` | `BeforeTool` hook in `~/.gemini/settings.json` | fail closed (deny with reason) |
+| **Codex** | `railguard init codex` | `~/.codex/hooks.json` + `[features] hooks = true` in `config.toml` | fail closed |
+| **Grok Build** | `railguard init grok` | hook file in `~/.grok/hooks/` | fail closed |
+| **opencode** | `railguard init opencode` | plugin in `~/.config/opencode/plugins/` — blocks by throwing | fail closed |
+| **pi** | `railguard init pi` | extension in `~/.pi/agent/extensions/` — blocks via `{ block: true }` | fail closed |
+| **anything else** | `railguard exec -- <cmd>` | generic wrapper for scripts, CI, other agents | fail closed |
+
+Two honest notes: Grok Build itself fails open when a hook crashes or times
+out ([their docs say so](https://docs.x.ai/build/features/hooks)) — our hook
+exits cleanly, but a missing `railguard` binary would let Grok proceed, so run
+`railguard doctor`. And Grok also reads Claude Code's `.claude/settings.json`
+natively, so the claude adapter often covers it for free. Every adapter
+records to the same tamper-evident ledger, tagged per agent
+(`claude-<session>.jsonl`, `grok-<session>.jsonl`, …).
 
 ## Example
 
@@ -101,8 +119,8 @@ Rules are evaluated in order; **first match wins**. `ask` shows the agent's requ
 
 | command | what it does |
 | --- | --- |
-| `railguard init claude` | installs the policy + PreToolUse hook into `~/.claude/settings.json` (backs up the original) |
-| `railguard hook claude` | hook entrypoint (Claude Code calls this; you normally don't) |
+| `railguard init <agent>` | installs the policy + hook for an agent — `claude`, `gemini`, `codex`, `grok`, `opencode`, `pi` (backs up originals) |
+| `railguard hook <agent>` | hook entrypoint (agents call this; you normally don't) |
 | `railguard exec -- <cmd>` | run any command under the policy — works from scripts, CI, other agents |
 | `railguard trace list` / `trace verify [file]` | list sessions / verify a session's hash chain |
 | `railguard doctor` | full health check: policy, hook, traces |
@@ -177,8 +195,9 @@ The "make agents safer" niche got crowded in 2025–2026, and that's good. Here 
 
 ## Roadmap
 
+- [x] Codex, Gemini CLI, Grok Build, opencode and pi adapters (v0.1)
 - [ ] **Policy integrity** — sign `policy.yaml` (hash anchored in the ledger) so a rogue agent can't weaken its own guard
-- [ ] Codex CLI / Gemini CLI / opencode adapters (good first issues!)
+- [ ] More agents: Cursor, Aider, Windsurf …
 - [ ] Secret-leak detection rules (deny reads/writes that move credential material into commands)
 - [ ] TUI session viewer
 - [ ] MCP server exposing trace queries to agents

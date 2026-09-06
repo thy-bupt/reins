@@ -44,14 +44,14 @@ git tag v0.1.0 && git push --tags   # tag exists locally if you cloned this repo
 
 Paste these as issues so first-time contributors have concrete targets:
 
-1. **Adapter: Codex CLI** — normalize Codex tool-call payloads to railguard's
-   `ToolEvent` shape, mirror `src/adapters/claude/` (normalizer + installer +
-   protocol tests).
-2. **Adapter: Gemini CLI** — same shape.
-3. **Secret-leak detection rules** — deny rules that catch credential
+1. **Adapters: Cursor / Aider / Windsurf** — same shape as the six shipped
+   adapters (`src/adapters/`): payload normalizer + installer + protocol tests.
+2. **Secret-leak detection rules** — deny rules that catch credential
    material being moved into command arguments; add cases to the bypass suite.
-4. **Policy presets** — `policies/web-dev.yaml`, `policies/data-science.yaml`,
+3. **Policy presets** — `policies/web-dev.yaml`, `policies/data-science.yaml`,
    `policies/infra.yaml` with tests proving normal workflows pass.
+4. **Policy signing** — hash-anchor `policy.yaml` in the ledger so a rogue
+   agent can't weaken its own guard (top roadmap item).
 
 ## 6. Launch posts
 

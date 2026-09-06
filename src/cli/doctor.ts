@@ -3,6 +3,9 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { hasRailguardHook } from "../adapters/claude/installer.js";
+import { hasGeminiHook } from "../adapters/gemini/installer.js";
+import { hasGrokHook } from "../adapters/grok/installer.js";
+import { hasCodexHook, configTomlHasHooksEnabled } from "../adapters/codex/installer.js";
 import { loadPolicy, PolicyError } from "../core/policy.js";
 import { verifyTrace } from "../core/trace.js";
 
@@ -17,11 +20,28 @@ export interface DoctorReport {
   checks: CheckResult[];
 }
 
+/** Paths of the non-claude agent configs. Passing them enables the per-agent
+ *  checks; omitting keeps doctor hermetic (used by tests). */
+export interface AgentPaths {
+  gemini?: string;
+  grok?: string;
+  codexHooks?: string;
+  codexConfig?: string;
+  opencode?: string;
+  pi?: string;
+}
+
 export interface DoctorOptions {
   home: string;
   settingsPath: string;
   /** verify the `railguard` binary resolves on PATH (skippable in tests) */
   checkPath?: boolean;
+  agentPaths?: AgentPaths;
+}
+
+async function readTextIfExists(filePath: string | undefined): Promise<string | null> {
+  if (!filePath || !existsSync(filePath)) return null;
+  return readFile(filePath, "utf8");
 }
 
 export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
@@ -80,7 +100,61 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
     }
   }
 
-  // 3. sessions dir
+  // 3. other agent adapters (optional — warn, never fail, on absence)
+  const agents = opts.agentPaths ?? {};
+  const hint = (name: string) => `run \`railguard init ${name}\` to install`;
+
+  const geminiSettings = await readTextIfExists(agents.gemini);
+  if (geminiSettings !== null && hasGeminiHook(geminiSettings)) {
+    checks.push({ name: "agent:gemini", status: "ok", detail: `installed (${agents.gemini})` });
+  } else if (agents.gemini) {
+    checks.push({ name: "agent:gemini", status: "warn", detail: `not installed — ${hint("gemini")}` });
+  }
+
+  const grokHooks = await readTextIfExists(agents.grok);
+  if (grokHooks !== null && hasGrokHook(grokHooks)) {
+    checks.push({ name: "agent:grok", status: "ok", detail: `installed (${agents.grok})` });
+  } else if (agents.grok) {
+    checks.push({ name: "agent:grok", status: "warn", detail: `not installed — ${hint("grok")}` });
+  }
+
+  const codexHooks = await readTextIfExists(agents.codexHooks);
+  const codexConfig = await readTextIfExists(agents.codexConfig);
+  if (agents.codexHooks || agents.codexConfig) {
+    const hooksOk = codexHooks !== null && hasCodexHook(codexHooks);
+    const featureOk = codexConfig !== null && configTomlHasHooksEnabled(codexConfig);
+    if (hooksOk && featureOk) {
+      checks.push({ name: "agent:codex", status: "ok", detail: `installed (${agents.codexHooks})` });
+    } else if (!hooksOk) {
+      checks.push({ name: "agent:codex", status: "warn", detail: `not installed — ${hint("codex")}` });
+    } else {
+      checks.push({
+        name: "agent:codex",
+        status: "warn",
+        detail: "hooks.json present but the `[features] hooks = true` feature flag is missing in config.toml — hooks will not run",
+      });
+    }
+  }
+
+  if (agents.opencode) {
+    const plugin = await readTextIfExists(agents.opencode);
+    if (plugin !== null && plugin.includes("tool.execute.before")) {
+      checks.push({ name: "agent:opencode", status: "ok", detail: `installed (${agents.opencode})` });
+    } else {
+      checks.push({ name: "agent:opencode", status: "warn", detail: `not installed — ${hint("opencode")}` });
+    }
+  }
+
+  if (agents.pi) {
+    const ext = await readTextIfExists(agents.pi);
+    if (ext !== null && ext.includes("tool_call")) {
+      checks.push({ name: "agent:pi", status: "ok", detail: `installed (${agents.pi})` });
+    } else {
+      checks.push({ name: "agent:pi", status: "warn", detail: `not installed — ${hint("pi")}` });
+    }
+  }
+
+  // 4. sessions dir
   const sessionsDir = join(opts.home, "sessions");
   if (existsSync(sessionsDir)) {
     const count = (await readdir(sessionsDir)).filter((f) => f.endsWith(".jsonl")).length;
@@ -89,7 +163,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
     checks.push({ name: "sessions", status: "ok", detail: "no sessions yet (created on first use)" });
   }
 
-  // 4. trace integrity
+  // 5. trace integrity
   if (existsSync(sessionsDir)) {
     const files = (await readdir(sessionsDir)).filter((f) => f.endsWith(".jsonl"));
     const broken: string[] = [];
@@ -111,7 +185,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
     checks.push({ name: "traces", status: "ok", detail: "nothing to verify yet" });
   }
 
-  // 5. binary on PATH
+  // 6. binary on PATH
   if (opts.checkPath !== false) {
     const probe = spawnSync("railguard", ["--version"], { encoding: "utf8" });
     if (probe.error || probe.status !== 0) {

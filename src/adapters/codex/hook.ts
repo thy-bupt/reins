@@ -7,11 +7,10 @@ import {
 } from "../common.js";
 
 /**
- * Claude Code PreToolUse hook handler. Protocol:
- *  - deny  -> exit code 2, reason on stderr (fed back to the agent)
- *  - ask   -> exit 0 + JSON permissionDecision on stdout
- *  - allow -> exit 0, silent
- * Malformed payloads fail closed: exit 2.
+ * Codex PreToolUse hook handler. Codex's hook protocol mirrors Claude Code's:
+ * snake_case payload on stdin, exit code 2 blocks with stderr as the reason,
+ * and hookSpecificOutput.permissionDecision is supported. There is no
+ * documented "ask" channel, so ask rules fail closed.
  */
 export async function handlePreToolUse(
   payload: unknown,
@@ -20,6 +19,6 @@ export async function handlePreToolUse(
   return runAdapterHook(normalizeSnakeCasePayload(payload), {
     policy: opts.policy,
     trace: opts.trace,
-    channel: "claude",
+    channel: "codex",
   });
 }

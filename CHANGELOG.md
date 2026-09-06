@@ -3,6 +3,22 @@
 All notable changes to railguard are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is SemVer.
 
+## [Unreleased]
+
+### Added
+- **Multi-agent adapters** with end-to-end matrix tests (init → hook → ledger
+  verify per agent):
+  - Gemini CLI — `BeforeTool` hook in `~/.gemini/settings.json`
+  - Codex — `~/.codex/hooks.json` plus comment-preserving
+    `[features] hooks = true` injection into `config.toml`
+  - Grok Build — hook file in `~/.grok/hooks/` (camelCase payload)
+  - opencode — auto-loaded plugin that blocks by throwing
+  - pi — auto-loaded extension using the `tool_call` block contract
+- `railguard init <agent>` and `railguard hook <agent>` accept all adapters;
+  ask rules fail closed on agents without an ask channel
+- `railguard doctor` reports per-agent install status (optional agents warn,
+  never fail)
+
 ## [0.1.0] — 2026-09-06
 
 Initial release.
