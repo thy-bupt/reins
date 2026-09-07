@@ -28,6 +28,7 @@ import { SKILL_NAMES, installSkill, uninstallSkill } from "../skills/installer.j
 import { loadLlmConfig } from "../llm/config.js";
 import { runSuggestPipeline } from "../llm/suggest.js";
 import { runExplain, buildLlmSnapshot } from "../llm/explain.js";
+import { runUi } from "../tui/ui.js";
 import { formatTraceShow } from "./show.js";
 import { formatDoctorReport, runDoctor, type DoctorOptions } from "./doctor.js";
 import { formatReplayReport, replaySession } from "./replay.js";
@@ -111,9 +112,22 @@ const program = new Command();
 program
   .name("reins")
   .description(
-    "Fail-closed safety rail for AI coding agents: policy engine, tamper-evident trace, session replay.",
+    "Verifiable execution evidence layer for AI coding agents: deterministic policy gate, tamper-evident ledger, replay, forensics.",
   )
   .version(VERSION);
+
+// bare `reins` in a real terminal opens the interactive browser
+if (process.argv.length <= 2 && process.stdout.isTTY && !process.env["NO_COLOR"]) {
+  await runUi({ sessionsDir: sessionsDir(), policyPath: resolvePolicyPath(), version: VERSION });
+  process.exit(0);
+}
+
+program
+  .command("ui")
+  .description("interactive session browser (colored timelines, event drill-in)")
+  .action(async () => {
+    await runUi({ sessionsDir: sessionsDir(), policyPath: resolvePolicyPath(), version: VERSION });
+  });
 
 program
   .command("init")
