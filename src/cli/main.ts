@@ -44,7 +44,7 @@ import {
 import { decide } from "../core/decider.js";
 import { loadPolicy, PolicyError } from "../core/policy.js";
 import { runGuarded } from "../core/runner.js";
-import { readTrace, TraceWriter, verifyTrace } from "../core/trace.js";
+import { ensureSecureLedgerDirs, readTrace, TraceWriter, verifyTrace } from "../core/trace.js";
 
 const require = createRequire(import.meta.url);
 const VERSION: string = require("../../package.json").version;
@@ -133,7 +133,7 @@ program
     if (!isHookAdapter && adapter !== "skills" && adapter !== "mcp") {
       return failClosed(`unknown adapter "${adapter}" (supported: ${HOOK_ADAPTER_NAMES.join(", ")}, skills, mcp)`);
     }
-    await mkdir(sessionsDir(), { recursive: true });
+    await ensureSecureLedgerDirs(reinsHome(), sessionsDir());
 
     const policyDest = userPolicyPath();
     const policySource = opts.policy ?? BUNDLED_POLICY_PATH;
@@ -331,6 +331,7 @@ program
       // sessionIdFrom understands snake_case and camelCase payloads;
       // sanitizeSessionId keeps the ledger path inside sessions/
       const sessionId = sanitizeSessionId(adapter, sessionIdFrom(payload, adapter));
+      await ensureSecureLedgerDirs(reinsHome(), sessionsDir());
       const trace = await TraceWriter.open(join(sessionsDir(), `${adapter}-${sessionId}.jsonl`));
       const outcome = await handler(payload, { policy, trace, policyDigest });
       if (outcome.stdout) process.stdout.write(outcome.stdout);
@@ -353,6 +354,7 @@ program
     const policyPath = resolvePolicyPath(opts.policy);
     const policyText = readFileSync(policyPath, "utf8");
     const policy = loadPolicy(policyText);
+    await ensureSecureLedgerDirs(reinsHome(), sessionsDir());
     const trace = await TraceWriter.start(sessionsDir());
     const decision = decide(policy, { tool: "exec", input: { command } });
     const result = await runGuarded({

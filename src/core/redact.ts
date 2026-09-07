@@ -30,6 +30,20 @@ export function tildePath(p: string): string {
   return p;
 }
 
+/** Path anonymization for LLM outbound data (stricter than tildePath):
+ *  paths under the user's home become ~/..., and ANY other absolute path
+ *  (/tmp, /srv, /Volumes, /private/var …) collapses to <ABS_PATH>/basename
+ *  so no local directory structure leaks. Relative paths pass through. */
+export function anonymizePath(p: string): string {
+  const t = tildePath(p);
+  if (t.startsWith("~") || !t.startsWith("/")) return t;
+  return "<ABS_PATH>/" + basename(t);
+}
+
+function basename(p: string): string {
+  return p.split("/").pop() ?? p;
+}
+
 export function commandDigest(command: string): string {
   return createHash("sha256").update(command).digest("hex");
 }

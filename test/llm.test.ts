@@ -111,6 +111,7 @@ describe("validateProposal (deterministic verification of LLM output)", () => {
   it("reports replay impact against real session ledgers", async () => {
     const dir = mkdtempSyncDir();
     const sessions = join(dir, "sessions");
+    mkdirSync(sessions, { recursive: true, mode: 0o700 });
     const writer = await TraceWriter.open(join(sessions, "claude-impact.jsonl"));
     await writer.append({
       tool: "Bash",

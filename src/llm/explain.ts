@@ -1,4 +1,4 @@
-import { redactCommand, tildePath } from "../core/redact.js";
+import { anonymizePath, redactCommand } from "../core/redact.js";
 import type { LlmConfig } from "./config.js";
 import { completePrompt } from "./provider.js";
 
@@ -30,7 +30,7 @@ export function buildLlmSnapshot(events: LlmSnapshotEvent[], meta: LlmSnapshotMe
   lines.push(`agent: ${meta.agent} · session: ${meta.sessionId} · ledger integrity: ${verdict}`);
   lines.push("");
   for (const e of events) {
-    const action = e.command ?? (e.filePath ? `${e.tool}: ${tildePath(e.filePath)}` : "(no command/path)");
+    const action = e.command ?? (e.filePath ? `${e.tool}: ${anonymizePath(e.filePath)}` : "(no command/path)");
     const rule = e.matchedRule ? ` [${e.matchedRule}]` : "";
     const reason = e.reason ? ` — ${redactCommand(e.reason)}` : "";
     lines.push(`- ${e.ts} ${e.decision.toUpperCase()} ${e.tool}: ${redactCommand(action)}${rule}${reason}`);

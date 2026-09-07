@@ -1,9 +1,8 @@
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
 import { stringify as yamlStringify } from "yaml";
 import { decide } from "../core/decider.js";
-import { redactCommand, tildePath } from "../core/redact.js";
+import { anonymizePath, redactCommand } from "../core/redact.js";
 import type { Policy, Rule } from "../core/policy.js";
 import { loadPolicy } from "../core/policy.js";
 import { verifyEvents, verifyTrace, readTrace, type TraceEvent } from "../core/trace.js";
@@ -268,34 +267,24 @@ function readEvents(file: string): TraceEvent[] {
     .map((l) => JSON.parse(l) as TraceEvent);
 }
 
-/** Deterministic, REDACTED data collection for the LLM prompt: commands are
- *  secret-redacted, absolute paths become tilde paths, ledger files are
- *  referenced by basename only. */
-export async function collectLedgerSummary(sessionsDir: string, sessionLimit = 3): Promise<string> {
-  if (!existsSync(sessionsDir)) return JSON.stringify({ sessions: [] });
-  const names = readdirSync(sessionsDir).filter((f) => f.endsWith(".jsonl"));
-  const files = names
-    .map((name) => {
-      const path = join(sessionsDir, name);
-      return { path, mtimeMs: statSync(path).mtimeMs };
-    })
-    .sort((a, b) => b.mtimeMs - a.mtimeMs)
-    .slice(0, sessionLimit);
-
+/** Deterministic, REDACTED data collection for the LLM prompt — built from
+ *  the EXPLICIT caller-selected file list only. Commands are secret-redacted,
+ *  absolute paths are anonymized, ledger files referenced by basename. */
+export async function collectLedgerSummaryFromFiles(sessionFiles: string[]): Promise<string> {
   const sessions: Array<Record<string, unknown>> = [];
-  for (const f of files) {
+  for (const f of sessionFiles) {
     try {
-      const integrity = await verifyTrace(f.path);
-      const events = await readTrace(f.path);
+      const integrity = await verifyTrace(f);
+      const events = await readTrace(f);
       sessions.push({
-        ledger: basename(f.path),
+        ledger: basename(f),
         integrity: integrity.ok ? "ok" : `tampered (${integrity.reason})`,
         decisions: events.map((e) => {
           const input = (typeof e.input === "object" && e.input !== null ? e.input : {}) as Record<string, unknown>;
           return {
             tool: e.tool,
             command: typeof input["command"] === "string" ? redactCommand(input["command"]) : undefined,
-            file_path: typeof input["file_path"] === "string" ? tildePath(input["file_path"]) : undefined,
+            file_path: typeof input["file_path"] === "string" ? anonymizePath(input["file_path"]) : undefined,
             decision: e.decision,
             matchedRule: e.matchedRule ?? undefined,
             reason: e.reason ?? undefined,
@@ -303,7 +292,7 @@ export async function collectLedgerSummary(sessionsDir: string, sessionLimit = 3
         }),
       });
     } catch {
-      // skip unreadable ledgers
+      // skip unreadable ledgers — they are also reported by validateProposal
     }
   }
   return JSON.stringify({ note: "commands are agent attempts (redacted); deny means blocked before execution", sessions }, null, 1);
@@ -354,20 +343,17 @@ export function parseProposals(llmOutput: string): RuleProposal[] {
   return out;
 }
 
-/** Full suggest pipeline over explicit session files (caller resolves
- *  --session or the newest N ledgers). */
+/** Full suggest pipeline over EXPLICIT session files: the summary is built
+ *  only from the caller-selected file list — no directory re-scan, so
+ *  sibling ledgers the user did not select never reach the provider. */
 export async function runSuggestPipeline(
   cfg: LlmConfig,
   existing: Policy,
   sessionFiles: string[],
-  sessionLimit = 3,
+  _sessionLimit = 3,
 ): Promise<{ verdicts: ProposalVerdict[]; prompt: string; llmOutput: string }> {
-  const dirs = [...new Set(sessionFiles.map((f) => dirname(f)))];
-  const summaries: string[] = [];
-  for (const dir of dirs) {
-    summaries.push(await collectLedgerSummary(dir, sessionLimit));
-  }
-  const prompt = buildSuggestPrompt(summaries.join("\n"));
+  const summary = await collectLedgerSummaryFromFiles(sessionFiles);
+  const prompt = buildSuggestPrompt(summary);
   const llmOutput = await completePrompt(prompt, cfg);
   const proposals = parseProposals(llmOutput);
   const verdicts = proposals.map((p) => validateProposal(p, existing, sessionFiles));

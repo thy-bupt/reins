@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { decide } from "../core/decider.js";
+import { redactCommand } from "../core/redact.js";
 import { loadPolicy } from "../core/policy.js";
 import { readTrace, verifyTrace } from "../core/trace.js";
 import { DEFAULT_LLM_CONFIG, type LlmConfig } from "../llm/config.js";
@@ -226,9 +227,12 @@ export function createToolHandlers(ctx: McpContext) {
         };
       }
       try {
+        // the prompt goes to a remote provider — it must never contain the
+        // raw denied command (which may carry bearer tokens, keys, passwords)
+        const safeCommand = redactCommand(args.command);
         const prompt = [
           "A security policy denied this AI-agent command:",
-          args.command,
+          safeCommand,
           'Propose up to 3 safer alternative commands that accomplish a similar goal. STRICT JSON only:',
           '{"alternatives":["command one","command two"]}',
         ].join("\n");

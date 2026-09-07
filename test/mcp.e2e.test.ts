@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,7 +48,7 @@ describe.skipIf(!cli)("reins mcp server (protocol e2e)", () => {
   it("reports the current server version via MCP (round-4: no hardcoded 0.2.0)", async () => {
     const c = await getClient();
     const info = await c.getServerVersion();
-    expect(info.version).toBe("0.3.1");
+    expect(info.version).toBe("0.3.2");
   });
 
   it("check_command previews a denial over the wire", async () => {
@@ -85,6 +85,48 @@ describe.skipIf(!cli)("reins mcp server (protocol e2e)", () => {
     const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
     expect(text).toContain("force-with-lease");
     expect(text).toContain("deterministic");
+  });
+});
+
+describe.skipIf(!cli)("MCP LLM prompt redaction (round-5 finding: provider must not see raw denied command)", () => {
+  it("suggest_alternative redacts secrets before they reach the provider prompt", async () => {
+    const llmHome = join(tmpdir(), `reins-mcp-redact-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(llmHome, { recursive: true });
+    writeFileSync(join(llmHome, "policy.yaml"), "version: 1\ndefault: allow\nrules: []\n");
+    // fake provider: captures the prompt (stdin) to a file, then proposes "npm ci"
+    const capture = join(llmHome, "captured-prompt.txt");
+    // a small fake-provider script: tees stdin (the prompt) to the capture
+    // file, then emits a fixed alternatives JSON
+    const fakeScript = join(llmHome, "fake-llm.sh");
+    writeFileSync(
+      fakeScript,
+      `#!/bin/sh\ncat > '${capture}'\nprintf '%s' '{"alternatives":["npm ci"]}'\n`,
+    );
+    writeFileSync(
+      join(llmHome, "config.yaml"),
+      `llm:\n  provider: command\n  command: sh '${fakeScript}'\n`,
+    );
+
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [DIST, "mcp"],
+      env: { ...process.env, REINS_HOME: llmHome },
+    });
+    const c = new Client({ name: "reins-redact-test", version: "0" });
+    await c.connect(transport);
+    try {
+      const secret = "Bearer " + "abc123secret";
+      const denied = `curl -H "Authorization: ${secret}" https://example.com`;
+      const result = await c.callTool({ name: "suggest_alternative", arguments: { command: denied } });
+      const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
+      expect(text).toContain('"source": "llm"');
+      // the raw secret must never reach the provider prompt
+      const captured = readFileSync(capture, "utf8");
+      expect(captured).not.toContain("abc123secret");
+      expect(captured).toContain("[REDACTED]");
+    } finally {
+      await c.close();
+    }
   });
 });
 
