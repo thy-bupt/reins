@@ -150,6 +150,22 @@ describe("runDoctor", () => {
     }
   });
 
+  it("honors --agent: gemini absence becomes a fail when gemini is primary", async () => {
+    const home = await tmpHome();
+    await writeFile(join(home, "policy.yaml"), goodPolicy);
+    const agentDir = await tmpHome();
+    const report = await runDoctor({
+      home,
+      settingsPath: join(home, "settings.json"),
+      checkPath: false,
+      primaryAgent: "gemini",
+      agentPaths: { gemini: join(agentDir, "gemini-settings.json") },
+    });
+    const gemini = report.checks.find((c) => c.name === "agent:gemini")!;
+    expect(gemini.status).toBe("fail");
+    expect(report.healthy).toBe(false);
+  });
+
   it("warns when codex hooks.json exists but the config.toml feature flag is missing", async () => {
     const home = await tmpHome();
     await writeFile(join(home, "policy.yaml"), goodPolicy);

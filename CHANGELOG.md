@@ -9,6 +9,11 @@ Round-4 independent review fixes. The deterministic core from 0.3.0 is
 unchanged; all fixes carry regression tests (255 tests total).
 
 ### Fixed
+- **doctor detects unprotected projects** — a working directory with its own
+  `.claude/settings.json` (or `.claude/` dir) but no reins hook is flagged
+  ("agent sessions here are unrecorded"); found during a real terraform-repo
+  session where a missing project hook let an agent write terraform.tfstate
+  unnoticed
 - **`reins suggest --apply` corrupted empty policies** — appends are now a
   structured merge: accepted Rule objects are appended to the policy AST,
   re-serialized with the yaml library, and round-tripped through

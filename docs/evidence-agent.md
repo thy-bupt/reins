@@ -104,3 +104,26 @@ agent 会话（Edit README + rm -rf /tmp/reins-real-victim）：
 真实仓库会暴露合成测试想不到的策略盲区（tfstate）。reins 的迭代闭环：
 真实项目 → 盲区确证（hook 层确定性复现）→ 默认策略升级 + 语料测试 →
 同会话漂移检测 → doctor 告警。
+
+
+## 追加：未保护项目的真实事故（2026-09-07）
+
+tf-vpc 会话前遗漏了 `reins init` —— 该项目的 agent 会话**完全无 hook**：
+agent 真实写出 `terraform.tfstate`（含敏感数据），账本零记录，静默发生。
+这正是"装了 reins ≠ 到处都被保护"的真实教训。
+
+### 产品化响应
+
+`reins doctor` 新增 **project-hook 检查**：当工作目录存在项目级
+`.claude/settings.json`（或 `.claude/` 目录）但没有 reins hook 时告警
+——"agent sessions in this directory are unrecorded"。
+
+### 安装 hook 后重放
+
+```text
+agent: 文件创建失败。一个名为 protect-terraform-state 的 pre-tool 钩子
+拦截了写入操作……terraform.tfstate 未被创建。
+$ ls terraform.tfstate  → 不存在 ✓
+```
+
+同一真实 agent、同一任务：有 hook = 拦截 + 账本记录；无 hook = 静默裸奔。

@@ -26,6 +26,18 @@ describe("runGuarded", () => {
     expect(events[0]!.exitCode).toBe(0);
   });
 
+  it("records the policy digest on ledger events when provided", async () => {
+    const trace = await TraceWriter.start(await tmpDir());
+    const result = await runGuarded({
+      command: "echo digest",
+      trace,
+      policyDigest: "aa11bb33",
+    });
+    expect(result.exitCode).toBe(0);
+    const events = await readTrace(trace.filePath);
+    expect(events[0]!.policyDigest).toBe("aa11bb33");
+  });
+
   it("records an error event with the failing exit code", async () => {
     const trace = await TraceWriter.start(await tmpDir());
     const result = await runGuarded({ command: "exit 3", trace });

@@ -38,6 +38,8 @@ export interface DoctorOptions {
   /** verify the `reins` binary resolves on PATH (skippable in tests) */
   checkPath?: boolean;
   agentPaths?: AgentPaths;
+  /** check the working directory's project-scope Claude settings for a reins hook */
+  projectDir?: string;
   /** treat this adapter as the primary one: its absence is a fail, and other
    *  agents are not flagged. Defaults to claude. */
   primaryAgent?: "claude" | "gemini" | "grok" | "codex" | "opencode" | "pi";
@@ -169,6 +171,43 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
     } else {
       checks.push({ name: "agent:pi", status: severityFor("pi"), detail: `not installed — ${hint("pi")}` });
     }
+  }
+
+  // 3b. project-scope protection: a repo with its own .claude/settings.json
+  //     but no reins hook means agent sessions HERE run unrecorded — the
+  //     failure mode that let an agent write terraform.tfstate unnoticed
+  if (opts.projectDir && existsSync(join(opts.projectDir, ".claude", "settings.json"))) {
+    try {
+      const projectSettings: unknown = JSON.parse(
+        await readFile(join(opts.projectDir, ".claude", "settings.json"), "utf8"),
+      );
+      if (hasReinsHook(projectSettings)) {
+        checks.push({
+          name: "project-hook",
+          status: "ok",
+          detail: `this project's Claude settings carry the reins hook`,
+        });
+      } else {
+        checks.push({
+          name: "project-hook",
+          status: "warn",
+          detail:
+            "this project's .claude/settings.json has hooks but none from reins — agent sessions in this directory are unrecorded (run `reins init claude --settings <project>/.claude/settings.json`)",
+        });
+      }
+    } catch {
+      checks.push({
+        name: "project-hook",
+        status: "warn",
+        detail: "this project's .claude/settings.json is not valid JSON",
+      });
+    }
+  } else if (opts.projectDir && existsSync(join(opts.projectDir, ".claude"))) {
+    checks.push({
+      name: "project-hook",
+      status: "warn",
+      detail: "this project has a .claude directory but no settings.json — agent sessions here are unrecorded",
+    });
   }
 
   // 4. sessions dir

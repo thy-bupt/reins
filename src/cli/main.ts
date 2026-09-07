@@ -423,6 +423,7 @@ program
       checkPath: opts.pathCheck,
       primaryAgent: opts.agent as DoctorOptions["primaryAgent"],
       all: opts.all,
+      projectDir: process.cwd(),
       agentPaths: {
         gemini: join(homedir(), ".gemini", "settings.json"),
         grok: join(homedir(), ".grok", "hooks", "reins.json"),
@@ -498,7 +499,9 @@ program
     };
     const md = buildSnapshotMarkdown(data);
     const out = opts.out ?? `reins-snapshot-${agent}-${sessionId.replace(/[:.]/g, "-").slice(0, 40)}.md`;
-    await writeFile(out, md, "utf8");
+    await mkdir(dirname(out), { recursive: true });
+    // snapshot reports contain command text — owner-only, like the ledger
+    await writeFile(out, md, { encoding: "utf8", mode: 0o600 });
     console.log(`snapshot written: ${out}`);
     console.log(
       `events: ${events.length}, chain: ${integrity.ok ? "OK" : `TAMPERED (${integrity.reason} at event ${integrity.brokenAt})`}` +
@@ -703,6 +706,7 @@ trace
       opts.format === "json" ? toJsonDocument(records, meta) : toNdjson(records);
     if (opts.out) {
       // evidence exports contain command text — keep them owner-only
+      await mkdir(dirname(opts.out), { recursive: true });
       await writeFile(opts.out, payload, { encoding: "utf8", mode: 0o600 });
       console.log(`evidence exported: ${opts.out} (${records.length} events, ${payload.length} bytes)`);
     } else {
@@ -759,6 +763,7 @@ program
     const report = lines.join("\n");
     if (opts.out) {
       // proposals reference ledger contents — keep report files private
+      await mkdir(dirname(opts.out), { recursive: true });
       await writeFile(opts.out, report + "\n", { encoding: "utf8", mode: 0o600 });
       console.log(`report written: ${opts.out}`);
     } else {
