@@ -29,7 +29,8 @@ llm:
 - `command`：reins 把 prompt 写入该命令的 stdin，读取 stdout 作为回复——
   任何能读 stdin 输出文本的程序都可以（本地模型推荐方式，完全离线）
 - `openai`：调用 `<baseUrl>/chat/completions`。**仅允许公网地址**——
-  localhost/内网地址会被拒绝；本地模型请用 `command` provider
+  loopback/私有/内网地址、IPv4-mapped 与 ULA IPv6、重定向均被拒绝；
+  本地模型请用 `command` provider（已知限制：不做 DNS 解析后复查，见下）
 - 不存在配置文件或 `provider: none` → 建议类命令打印指引后以退出码 1 结束
 
 ## 命令
@@ -40,7 +41,8 @@ llm:
 reins suggest [--last 3] [--out report.txt] [--apply]
 ```
 
-读取最近会话的账本（deny 模式聚类 + allow 样本），请 LLM 提议 0-3 条新规则。
+读取会话账本（`--session <file>` 指定单个文件，或默认最近 3 个），
+请 LLM 提议**至多 3 条**新规则。
 每条提议自动经过：
 
 1. schema 校验（复用策略加载器）
@@ -48,8 +50,9 @@ reins suggest [--last 3] [--out report.txt] [--apply]
    命中，提议自动作废
 3. **replay 影响分析**：该规则对历史会话的影响（会新拦几条）
 
-`--apply` 才会写入 `~/.reins/policy.yaml`（自动备份；注意 YAML 注释会被重建，
-重要注释请放在 git 里）。被采纳规则的 `reason` 标注 `llm-suggested` 溯源。
+`--apply` 才会写入 `~/.reins/policy.yaml`：结构化合并（规则对象 → YAML 序列化 →
+loadPolicy 回读验证 → 原子写入；任何失败原文件字节不变），并自动备份。
+被采纳规则的 `reason` 标注 `[llm-suggested <日期>]` 溯源。
 
 ### `reins explain`（事故叙事）
 
@@ -80,3 +83,13 @@ reins explain [--audience dev|audit]
 ## 状态
 
 `reins doctor` 的 `llm` 行显示当前 provider（未配置为正常状态，不是错误）。
+
+## 已知限制（如实声明）
+
+- `openai` provider 的地址检查在**发起请求前**执行（协议/主机名/IPv6 规范化/
+  端口 0/重定向拒绝）；**不做 DNS 解析后复查**——公网域名若在请求时解析到
+  内网 IP，本版本无法检出。完全离线的方案是 `command` provider + 本地模型
+- `explain` 发送的是 LLM 安全渲染的时间线（脱敏命令 + `~` 化路径），
+  不含绝对文件系统路径和 diff；`suggest` 发送脱敏后的命令与 `~` 化路径。
+  使用云端 provider 即表示接受这些文本出境
+- 建议类命令的报告文件（`--out`）以 0600 权限写入

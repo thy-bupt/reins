@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 const DIR_MODE = 0o700;
 const FILE_MODE = 0o600;
 const LOCK_STALE_MS = 10_000;
-const LOCK_MAX_AGE_MS = 60_000;
+const LOCK_UNPARSEABLE_GRACE_MS = 30_000;
 
 function pidAlive(pid: number): boolean {
   try {
@@ -17,31 +17,51 @@ function pidAlive(pid: number): boolean {
   }
 }
 
+/** Steal decision, extracted for testing: a lock held by a LIVE process is
+ *  never stolen — no matter how old. Dead-pid locks are stolen after the
+ *  stale window; unparseable locks get a longer grace window. */
+export function shouldStealLock(
+  raw: string | null,
+  now: number,
+  firstSeenAt: number,
+): boolean {
+  if (raw === null) return false;
+  let parsed: { pid?: number; createdAt?: number };
+  try {
+    parsed = JSON.parse(raw) as { pid?: number; createdAt?: number };
+  } catch {
+    return now - firstSeenAt > LOCK_UNPARSEABLE_GRACE_MS;
+  }
+  const pid = parsed.pid;
+  const createdAt = parsed.createdAt;
+  if (typeof pid !== "number" || typeof createdAt !== "number") {
+    return now - firstSeenAt > LOCK_UNPARSEABLE_GRACE_MS;
+  }
+  if (pidAlive(pid)) return false; // slow but live writer: never snatched
+  return now - createdAt > LOCK_STALE_MS;
+}
+
 /** Cross-process advisory lock: concurrent hooks (parallel tool calls of one
  *  agent session) must not interleave appends and break the hash chain.
  *  The lock file records `{pid, createdAt, token}`; a lock is only stolen
  *  when its recorded pid is dead (or the lock is unparseable) after the
- *  stale window — a slow but live writer never gets its lock snatched. */
+ *  grace window — a slow but live writer never gets its lock snatched. */
 async function withFileLock<T>(lockPath: string, fn: () => Promise<T>): Promise<T> {
   const token = randomBytes(16).toString("hex");
-  const startedAt = Date.now();
+  const firstSeenAt = Date.now();
   for (;;) {
     let fd;
     try {
       fd = await open(lockPath, "wx", FILE_MODE);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "EEXIST") {
-        let stolen = false;
+        let existing: string | null;
         try {
-          const raw = readFileSync(lockPath, "utf8");
-          const parsed = JSON.parse(raw) as { pid: number; createdAt: number };
-          const age = Date.now() - parsed.createdAt;
-          if (age > LOCK_STALE_MS && !pidAlive(parsed.pid)) stolen = true;
-          if (age > LOCK_MAX_AGE_MS) stolen = true;
+          existing = readFileSync(lockPath, "utf8");
         } catch {
-          if (Date.now() - startedAt > LOCK_STALE_MS) stolen = true; // unparseable lock
+          existing = null;
         }
-        if (stolen) {
+        if (shouldStealLock(existing, Date.now(), firstSeenAt)) {
           await rm(lockPath, { force: true });
           continue;
         }

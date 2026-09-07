@@ -31,7 +31,7 @@ function baseData(events: TraceEvent[], over: Partial<SnapshotData> = {}): Snaps
     eventCount: events.length,
     timeRange: { first: events[0]?.ts, last: events[events.length - 1]?.ts },
     integrity: { ok: true, events: events.length },
-    policy: { name: "railguard-default", rules: 13, sha256: "abc123", source: "~/.reins/policy.yaml" },
+    policy: { name: "reins-default", rules: 13, sha256: "abc123", source: "~/.reins/policy.yaml" },
     git: null,
     denied: events.filter((e) => e.decision === "deny"),
     allowed: events.filter((e) => e.decision !== "deny"),

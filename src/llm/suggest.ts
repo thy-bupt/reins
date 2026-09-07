@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
-import { decide, type ToolEvent } from "../core/decider.js";
+import { dirname, join } from "node:path";
+import { stringify as yamlStringify } from "yaml";
+import { decide } from "../core/decider.js";
+import { redactCommand, tildePath } from "../core/redact.js";
 import type { Policy, Rule } from "../core/policy.js";
+import { loadPolicy } from "../core/policy.js";
 import { verifyEvents, verifyTrace, readTrace, type TraceEvent } from "../core/trace.js";
 import { completePrompt } from "./provider.js";
 import type { LlmConfig } from "./config.js";
@@ -19,14 +22,18 @@ export interface RuleProposal {
 
 export interface ProposalVerdict {
   proposal: RuleProposal;
+  rule?: Rule;
   id: string;
   accepted: boolean;
   problems: string[];
-  yaml: string;
+  yaml?: string;
   impact: { newBlocks: number; allowEvents: number };
 }
 
-/** False-positive corpus: any proposed rule that would block one of these is
+const MAX_PROPOSALS = 3;
+const MAX_FIELD_LENGTH = 200;
+
+/** False-positive corpora: any proposed rule that would block one of these is
  *  rejected automatically — the deterministic backstop for LLM output. */
 export const FALSE_POSITIVE_CORPUS: readonly string[] = [
   `echo "rm -rf /tmp/x"`,
@@ -37,58 +44,131 @@ export const FALSE_POSITIVE_CORPUS: readonly string[] = [
   "git status",
 ];
 
+export const FALSE_POSITIVE_PATH_CORPUS: readonly string[] = [
+  "README.md",
+  "src/index.ts",
+  "package.json",
+  "package-lock.json",
+  "node_modules/.bin/tool",
+  "/tmp/work.txt",
+];
+
+/** overly broad path globs are rejected outright — "block everything" rules
+ *  would otherwise pass validation when no session events match them */
+const OVERLY_BROAD_PATHS: ReadonlySet<string> = new Set([
+  "**",
+  "/**",
+  "**/*",
+  "**/**",
+  "*",
+  "~/**",
+  "$HOME/**",
+]);
+
+function hasControlChars(s: string): boolean {
+  // eslint-disable-next-line no-control-regex
+  return /[\x00-\x08\x0a-\x1f\x7f]/.test(s);
+}
+
 function stableId(prefix: string, proposal: RuleProposal): string {
   const h = createHash("sha256").update(JSON.stringify(proposal)).digest("hex").slice(0, 8);
   return `${prefix}-${h}`;
 }
 
-export function proposalToRule(proposal: RuleProposal): Rule | null {
-  if (proposal.kind === "command" && typeof proposal.program === "string" && proposal.program !== "") {
+function sanitizeProposalField(value: string, what: string, problems: string[]): string | null {
+  if (value.length > MAX_FIELD_LENGTH) {
+    problems.push(`${what} exceeds ${MAX_FIELD_LENGTH} characters`);
+    return null;
+  }
+  if (hasControlChars(value)) {
+    problems.push(`${what} contains control characters or newlines`);
+    return null;
+  }
+  return value;
+}
+
+function proposalToRule(
+  proposal: RuleProposal,
+  existing: Policy,
+  problems: string[],
+): Rule | null {
+  // reason hygiene — check control chars on the RAW text first (fail closed
+  // on newlines/control chars before any collapsing), then normalize
+  if (hasControlChars(proposal.reason)) {
+    problems.push("reason contains control characters or newlines");
+    return null;
+  }
+  const rawReason = proposal.reason.replace(/\s+/g, " ").trim();
+  if (rawReason.length > MAX_FIELD_LENGTH) {
+    problems.push(`reason exceeds ${MAX_FIELD_LENGTH} characters`);
+    return null;
+  }
+  const reason = `[llm-suggested ${new Date().toISOString().slice(0, 10)}] ${rawReason}`;
+  const ruleId = stableId("llm", proposal);
+
+  if (proposal.kind === "command") {
+    const hasProgram = typeof proposal.program === "string" && proposal.program !== "";
+    const hasPattern = typeof proposal.pattern === "string" && proposal.pattern !== "";
+    if (hasProgram && hasPattern) {
+      problems.push("command rule cannot have both program and pattern");
+      return null;
+    }
+    if (!hasProgram && !hasPattern) {
+      problems.push("command rule needs program or pattern");
+      return null;
+    }
+    if (hasProgram && sanitizeProposalField(proposal.program!, "program", problems) === null) return null;
+    if (proposal.flags && proposal.flags.some((f) => hasControlChars(f))) {
+      problems.push("flags contain control characters");
+      return null;
+    }
+    if (hasPattern && sanitizeProposalField(proposal.pattern!, "pattern", problems) === null) return null;
+    if (hasPattern) {
+      try {
+        new RegExp(proposal.pattern!);
+      } catch {
+        problems.push("pattern is not a valid regex");
+        return null;
+      }
+    }
     return {
-      id: stableId("llm", proposal),
+      id: ruleId,
       kind: "command",
       action: proposal.action,
-      program: proposal.program,
+      ...(hasProgram ? { program: proposal.program } : {}),
       ...(proposal.flags ? { flags: proposal.flags } : {}),
-      ...(proposal.pattern ? { pattern: proposal.pattern } : {}),
-      reason: proposal.reason,
+      ...(hasPattern ? { pattern: proposal.pattern } : {}),
+      reason,
     } as Rule;
   }
-  if (proposal.kind === "path" && typeof proposal.path === "string" && proposal.path !== "") {
-    return {
-      id: stableId("llm", proposal),
-      kind: "path",
-      action: proposal.action,
-      path: proposal.path,
-      reason: proposal.reason,
-    } as Rule;
+
+  if (typeof proposal.path !== "string") {
+    problems.push("path rule without path");
+    return null;
   }
-  return null;
+  const safePath = sanitizeProposalField(proposal.path, "path", problems);
+  if (safePath === null) return null;
+  const normalized = safePath.replace(/^\/+/, "").replace(/\/+$/, "");
+  if (OVERLY_BROAD_PATHS.has(normalized) || OVERLY_BROAD_PATHS.has(safePath)) {
+    problems.push(`overly broad path rule ("${safePath}") — narrow it to a specific subtree`);
+    return null;
+  }
+  return {
+    id: ruleId,
+    kind: "path",
+    action: proposal.action,
+    path: safePath,
+    reason,
+  } as Rule;
 }
 
-export function proposalToYaml(proposal: RuleProposal): string {
-  const rule = proposalToRule(proposal);
-  if (!rule) return "";
-  const lines: string[] = [];
-  lines.push(`  - id: ${rule.id}`);
-  lines.push(`    kind: ${rule.kind}`);
-  lines.push(`    action: ${rule.action}`);
-  if (rule.kind === "command") {
-    const cr = rule as Extract<Rule, { kind: "command" }>;
-    if (cr.program) lines.push(`    program: ${cr.program}`);
-    if (cr.flags) lines.push(`    flags: [${cr.flags.map((f) => `"${f}"`).join(", ")}]`);
-    if (cr.pattern) lines.push(`    pattern: '${cr.pattern}'`);
-  } else {
-    lines.push(`    path: "${(rule as Extract<Rule, { kind: "path" }>).path}"`);
-  }
-  lines.push(`    reason: "${proposal.reason}"`);
-  return lines.join("\n");
-}
-
-/** Deterministic verification of an LLM proposal:
- *  1. schema check (must become a valid rule);
- *  2. false-positive corpus (must never block the innocent list);
- *  3. replay impact against real session ledgers. */
+/** Deterministic verification of an LLM proposal — the full gate:
+ *  1. field sanitization (length, control chars) + over-broad path rejection;
+ *  2. rule object → YAML stringify → loadPolicy ROUND-TRIP (no hand-built
+ *     YAML, no injection surface);
+ *  3. false-positive corpora (commands AND paths);
+ *  4. replay impact against real session ledgers.
+ *  The generated YAML is only produced after every gate passes. */
 export function validateProposal(
   proposal: RuleProposal,
   existing: Policy,
@@ -96,18 +176,35 @@ export function validateProposal(
 ): ProposalVerdict {
   const problems: string[] = [];
   const id = stableId("llm", proposal);
-  const rule = proposalToRule(proposal);
-  if (!rule) {
-    problems.push("proposal does not form a valid rule (missing program or path)");
-    return { proposal, id, accepted: false, problems, yaml: "", impact: { newBlocks: 0, allowEvents: 0 } };
+  const fail = () => ({ proposal, id, accepted: false, problems, yaml: undefined, impact: { newBlocks: 0, allowEvents: 0 } });
+
+  const rule = proposalToRule(proposal, existing, problems);
+  if (!rule) return fail();
+
+  // YAML stringify + round-trip: the composed policy MUST parse back with the
+  // new rule inside — this is what makes YAML injection structurally impossible
+  const testPolicy: Policy = { version: 1, name: existing.name, default: existing.default, rules: [...existing.rules, rule] };
+  let testText: string;
+  try {
+    testText = yamlStringify(testPolicy);
+    const reparsed = loadPolicy(testText);
+    if (reparsed.rules.length !== testPolicy.rules.length) {
+      problems.push("round-trip lost rules");
+      return fail();
+    }
+  } catch (err) {
+    problems.push(`generated policy failed validation: ${err instanceof Error ? err.message : String(err)}`);
+    return fail();
   }
 
-  const testPolicy: Policy = { ...existing, rules: [...existing.rules, rule] };
-
   for (const cmd of FALSE_POSITIVE_CORPUS) {
-    const event: ToolEvent = { tool: "Bash", input: { command: cmd } };
-    if (decide(testPolicy, event).decision !== "allow") {
+    if (decide(testPolicy, { tool: "Bash", input: { command: cmd } }).decision !== "allow") {
       problems.push(`false positive: would block innocent command "${cmd}"`);
+    }
+  }
+  for (const p of FALSE_POSITIVE_PATH_CORPUS) {
+    if (decide(testPolicy, { tool: "Write", input: { file_path: p } }).decision !== "allow") {
+      problems.push(`false positive: would block innocent path "${p}"`);
     }
   }
 
@@ -123,10 +220,9 @@ export function validateProposal(
       }
       for (const e of events) {
         const input = (typeof e.input === "object" && e.input !== null ? e.input : {}) as Record<string, unknown>;
-        const event: ToolEvent = { tool: e.tool, input };
         if (typeof input["command"] !== "string" && typeof input["file_path"] !== "string") continue;
         allowEvents += 1;
-        if (e.decision === "allow" && decide(testPolicy, event).decision !== "allow") newBlocks += 1;
+        if (e.decision === "allow" && decide(testPolicy, { tool: e.tool, input }).decision !== "allow") newBlocks += 1;
       }
     } catch {
       problems.push(`unreadable session: ${file}`);
@@ -137,14 +233,30 @@ export function validateProposal(
     problems.push("an allow-proposal must never newly block events");
   }
 
+  const accepted = problems.length === 0;
   return {
     proposal,
+    rule: accepted ? rule : undefined,
     id,
-    accepted: problems.length === 0,
+    accepted,
     problems,
-    yaml: proposalToYaml(proposal),
+    yaml: accepted ? trimmedRuleYaml(testText, rule.id) : undefined,
     impact: { newBlocks, allowEvents },
   };
+}
+
+/** extract just the accepted rule's YAML block from the round-tripped policy */
+function trimmedRuleYaml(composedPolicyText: string, ruleId: string): string {
+  const lines = composedPolicyText.split("\n");
+  const start = lines.findIndex((l) => l.includes(`id: ${ruleId}`));
+  if (start === -1) return "";
+  const out: string[] = [];
+  for (let i = start; i < lines.length; i++) {
+    const l = lines[i]!;
+    if (i > start && /^ {2}- id:/.test(l)) break; // next rule starts
+    out.push(l.startsWith("  ") ? l.slice(2) : l);
+  }
+  return out.join("\n");
 }
 
 function readEvents(file: string): TraceEvent[] {
@@ -156,7 +268,9 @@ function readEvents(file: string): TraceEvent[] {
     .map((l) => JSON.parse(l) as TraceEvent);
 }
 
-/** Deterministic data collection: recent verified sessions, summarized. */
+/** Deterministic, REDACTED data collection for the LLM prompt: commands are
+ *  secret-redacted, absolute paths become tilde paths, ledger files are
+ *  referenced by basename only. */
 export async function collectLedgerSummary(sessionsDir: string, sessionLimit = 3): Promise<string> {
   if (!existsSync(sessionsDir)) return JSON.stringify({ sessions: [] });
   const names = readdirSync(sessionsDir).filter((f) => f.endsWith(".jsonl"));
@@ -174,14 +288,14 @@ export async function collectLedgerSummary(sessionsDir: string, sessionLimit = 3
       const integrity = await verifyTrace(f.path);
       const events = await readTrace(f.path);
       sessions.push({
-        file: f.path,
+        ledger: basename(f.path),
         integrity: integrity.ok ? "ok" : `tampered (${integrity.reason})`,
         decisions: events.map((e) => {
           const input = (typeof e.input === "object" && e.input !== null ? e.input : {}) as Record<string, unknown>;
           return {
             tool: e.tool,
-            command: typeof input["command"] === "string" ? input["command"] : undefined,
-            file_path: typeof input["file_path"] === "string" ? input["file_path"] : undefined,
+            command: typeof input["command"] === "string" ? redactCommand(input["command"]) : undefined,
+            file_path: typeof input["file_path"] === "string" ? tildePath(input["file_path"]) : undefined,
             decision: e.decision,
             matchedRule: e.matchedRule ?? undefined,
             reason: e.reason ?? undefined,
@@ -192,7 +306,11 @@ export async function collectLedgerSummary(sessionsDir: string, sessionLimit = 3
       // skip unreadable ledgers
     }
   }
-  return JSON.stringify({ note: "commands are agent attempts; deny means blocked before execution", sessions }, null, 1);
+  return JSON.stringify({ note: "commands are agent attempts (redacted); deny means blocked before execution", sessions }, null, 1);
+}
+
+function basename(p: string): string {
+  return p.split("/").pop() ?? p;
 }
 
 export function buildSuggestPrompt(summaryJson: string): string {
@@ -200,8 +318,9 @@ export function buildSuggestPrompt(summaryJson: string): string {
     "You are a security policy assistant for reins, a deterministic policy engine for AI coding agents.",
     "Analyze the ledger summary below and propose 0-3 NEW policy rules that reduce repeated dangerous patterns",
     "while keeping false positives near zero. Never propose rules that block package installs, test runs,",
-    "version control reads, or file listing. Output STRICT JSON only, no prose:",
-    '{"proposals":[{"kind":"command|path","action":"deny|ask|allow","program":"rm","flags":["-r"],"pattern":"regex (command rules only)","path":"glob (path rules only)","reason":"short human-readable reason"}]}',
+    "version control reads, or file listing. Never propose overly broad path globs like **.",
+    "Output STRICT JSON only, no prose:",
+    '{"proposals":[{"kind":"command|path","action":"deny|ask|allow","program":"rm","flags":["-r"],"pattern":"regex (command rules only)","path":"glob (path rules only)","reason":"short single-line reason"}]}',
     "",
     "LEDGER SUMMARY:",
     summaryJson,
@@ -217,8 +336,8 @@ export function parseProposals(llmOutput: string): RuleProposal[] {
   const parsed = JSON.parse(raw.slice(start, end + 1)) as { proposals?: unknown };
   if (!Array.isArray(parsed.proposals)) throw new Error("LLM output missing proposals array");
   const out: RuleProposal[] = [];
-  for (const raw2 of parsed.proposals) {
-    const p = raw2 as Record<string, unknown>;
+  for (const entry of parsed.proposals.slice(0, MAX_PROPOSALS)) {
+    const p = entry as Record<string, unknown>;
     if (p["kind"] !== "command" && p["kind"] !== "path") continue;
     if (p["action"] !== "deny" && p["action"] !== "ask" && p["action"] !== "allow") continue;
     if (typeof p["reason"] !== "string" || p["reason"].trim() === "") continue;
@@ -235,27 +354,22 @@ export function parseProposals(llmOutput: string): RuleProposal[] {
   return out;
 }
 
+/** Full suggest pipeline over explicit session files (caller resolves
+ *  --session or the newest N ledgers). */
 export async function runSuggestPipeline(
   cfg: LlmConfig,
-  sessionsDir: string,
   existing: Policy,
+  sessionFiles: string[],
   sessionLimit = 3,
 ): Promise<{ verdicts: ProposalVerdict[]; prompt: string; llmOutput: string }> {
-  const summary = await collectLedgerSummary(sessionsDir, sessionLimit);
-  const prompt = buildSuggestPrompt(summary);
+  const dirs = [...new Set(sessionFiles.map((f) => dirname(f)))];
+  const summaries: string[] = [];
+  for (const dir of dirs) {
+    summaries.push(await collectLedgerSummary(dir, sessionLimit));
+  }
+  const prompt = buildSuggestPrompt(summaries.join("\n"));
   const llmOutput = await completePrompt(prompt, cfg);
   const proposals = parseProposals(llmOutput);
-
-  const sessionFiles = sessionFilesIn(sessionsDir, sessionLimit);
   const verdicts = proposals.map((p) => validateProposal(p, existing, sessionFiles));
   return { verdicts, prompt, llmOutput };
-}
-
-function sessionFilesIn(sessionsDir: string, limit: number): string[] {
-  if (!existsSync(sessionsDir)) return [];
-  return readdirSync(sessionsDir)
-    .filter((f) => f.endsWith(".jsonl"))
-    .map((f) => join(sessionsDir, f))
-    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
-    .slice(0, limit);
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { copyFile, chmod, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -27,12 +27,13 @@ import { runMcpServer } from "../mcp/server.js";
 import { SKILL_NAMES, installSkill, uninstallSkill } from "../skills/installer.js";
 import { loadLlmConfig } from "../llm/config.js";
 import { runSuggestPipeline } from "../llm/suggest.js";
-import { runExplain } from "../llm/explain.js";
+import { runExplain, buildLlmSnapshot } from "../llm/explain.js";
 import { formatTraceShow } from "./show.js";
 import { formatDoctorReport, runDoctor, type DoctorOptions } from "./doctor.js";
 import { formatReplayReport, replaySession } from "./replay.js";
 import { buildSnapshotMarkdown, collectGitContext, deriveAgentAndSession, policySha256, type SnapshotData } from "./snapshot.js";
 import { buildEvidenceRecords, toJsonDocument, toNdjson } from "./export.js";
+import { stringify as yamlStringify } from "yaml";
 import {
   BUNDLED_POLICY_PATH,
   reinsHome,
@@ -701,7 +702,8 @@ trace
     const payload =
       opts.format === "json" ? toJsonDocument(records, meta) : toNdjson(records);
     if (opts.out) {
-      await writeFile(opts.out, payload, "utf8");
+      // evidence exports contain command text — keep them owner-only
+      await writeFile(opts.out, payload, { encoding: "utf8", mode: 0o600 });
       console.log(`evidence exported: ${opts.out} (${records.length} events, ${payload.length} bytes)`);
     } else {
       process.stdout.write(payload);
@@ -728,23 +730,63 @@ program
     const policyPath = resolvePolicyPath(opts.policy);
     const policyText = readFileSync(policyPath, "utf8");
     const policy = loadPolicy(policyText);
-    const { verdicts } = await runSuggestPipeline(cfg, sessionsDir(), policy, Math.max(1, Number(opts.last) || 3));
+
+    // resolve the analysis set: an explicit --session, or the newest N ledgers
+    let sessionFiles: string[];
+    if (opts.session) {
+      if (!existsSync(opts.session)) {
+        return failClosed(`session file not found: ${opts.session}`);
+      }
+      sessionFiles = [opts.session];
+    } else {
+      const limit = Math.max(1, Number(opts.last) || 3);
+      sessionFiles = existsSync(sessionsDir())
+        ? readdirSync(sessionsDir())
+            .filter((f) => f.endsWith(".jsonl"))
+            .map((f) => join(sessionsDir(), f))
+            .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+            .slice(0, limit)
+        : [];
+    }
+    const { verdicts } = await runSuggestPipeline(cfg, policy, sessionFiles, Math.max(1, Number(opts.last) || 3));
 
     const lines: string[] = [];
-    const accepted = verdicts.filter((v) => v.accepted);
+    const accepted = verdicts.filter((v) => v.accepted && v.rule);
     for (const v of verdicts) {
       lines.push(v.accepted ? `✓ accepted: ${v.id} (${v.impact.newBlocks} historical blocks)` : `✗ rejected: ${v.problems.join("; ")}`);
-      if (v.accepted) lines.push(v.yaml);
+      if (v.accepted) lines.push(v.yaml ?? "");
     }
     const report = lines.join("\n");
-    if (opts.out) await writeFile(opts.out, report + "\n", "utf8");
-    else console.log(report + "\n");
+    if (opts.out) {
+      // proposals reference ledger contents — keep report files private
+      await writeFile(opts.out, report + "\n", { encoding: "utf8", mode: 0o600 });
+      console.log(`report written: ${opts.out}`);
+    } else {
+      console.log(report + "\n");
+    }
 
     if (accepted.length > 0 && opts.apply) {
+      // structured merge: append the validated Rule objects to the policy AST,
+      // re-serialize, round-trip through loadPolicy, then atomic write.
+      // A failure here leaves the original policy bytes untouched.
+      const merged: typeof policy = {
+        ...policy,
+        rules: [...policy.rules, ...accepted.map((v) => v.rule!)],
+      };
+      const mergedText = yamlStringify(merged);
+      try {
+        const reparsed = loadPolicy(mergedText);
+        if (reparsed.rules.length !== merged.rules.length) {
+          return failClosed("generated policy lost rules during round-trip — original file unchanged");
+        }
+      } catch (err) {
+        return failClosed(
+          `generated policy failed validation — original file unchanged: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
       await backupOnce(policyPath);
-      const merged = policyText.trimEnd() + "\n\n# rules proposed by `reins suggest` (review before keeping)\n" + accepted.map((v) => v.yaml).join("\n") + "\n";
-      await atomicWrite(policyPath, merged);
-      console.log(`applied ${accepted.length} rule(s) to ${policyPath} — policy comments were regenerated; digest changes take effect on the next decision`);
+      await atomicWrite(policyPath, mergedText.endsWith("\n") ? mergedText : mergedText + "\n");
+      console.log(`applied ${accepted.length} rule(s) to ${policyPath} (YAML regenerated; policy digest changes on the next decision)`);
     } else if (accepted.length > 0) {
       console.log(`\n${accepted.length} proposal(s) passed verification. Review them and re-run with --apply to add to ${policyPath}.`);
     } else {
@@ -771,27 +813,31 @@ program
     if (!target) return failClosed("no session traces found");
     const events = await readTrace(target);
     const integrity = await verifyTrace(target);
-    const policyText = readFileSync(resolvePolicyPath(opts.policy), "utf8");
-    const policy = loadPolicy(policyText);
     const { agent, sessionId } = deriveAgentAndSession(target);
-    const { buildSnapshotMarkdown: bsm } = await import("./snapshot.js");
-    const markdown = bsm({
-      sourceFile: target,
+
+    // LLM-safe renderer: redacted commands, tilde paths, no absolute
+    // filesystem locations and no diffs ever leave the machine
+    const timeline = events.map((e) => {
+      const input = (typeof e.input === "object" && e.input !== null ? e.input : {}) as Record<string, unknown>;
+      return {
+        ts: e.ts,
+        tool: e.tool,
+        decision: e.decision,
+        matchedRule: e.matchedRule,
+        reason: e.reason,
+        command: typeof input["command"] === "string" ? input["command"] : undefined,
+        filePath: typeof input["file_path"] === "string" ? input["file_path"] : undefined,
+      };
+    });
+    const snapshotText = buildLlmSnapshot(timeline, {
       agent,
       sessionId,
-      eventCount: events.length,
-      timeRange: { first: events[0]?.ts, last: events[events.length - 1]?.ts },
-      integrity,
-      policy: { name: policy.name, rules: policy.rules.length, sha256: policySha256(policyText), source: resolvePolicyPath(opts.policy) },
-      git: null,
-      denied: events.filter((e) => e.decision === "deny"),
-      allowed: events.filter((e) => e.decision !== "deny"),
-      fileWrites: [],
-      generatedAt: new Date().toISOString(),
+      integrityOk: integrity.ok,
+      integrityNote: integrity.ok ? undefined : `${integrity.reason ?? "integrity failure"} at event ${integrity.brokenAt}`,
     });
     const audienceArg = opts.audience === "audit" ? "audit" : "dev";
-    const report = await runExplain(cfg, markdown, audienceArg);
-    if (opts.out) await writeFile(opts.out, report + "\n", "utf8");
+    const report = await runExplain(cfg, snapshotText, audienceArg);
+    if (opts.out) await writeFile(opts.out, report + "\n", { encoding: "utf8", mode: 0o600 });
     else console.log(report);
   });
 

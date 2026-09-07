@@ -90,7 +90,7 @@ describe.skipIf(!cli)("P0 CLI ergonomics (e2e against dist)", () => {
 
   it("uninstall opencode deletes the generated plugin file", () => {
     const home = freshHome();
-    const pluginPath = join(home, "railguard.js");
+    const pluginPath = join(home, "reins.js");
     runCli(["init", "opencode", "--settings", pluginPath], { REINS_HOME: home });
     expect(existsSync(pluginPath)).toBe(true);
 
@@ -111,7 +111,7 @@ describe.skipIf(!cli)("P0 CLI ergonomics (e2e against dist)", () => {
 
   it("uninstall refuses to delete a repurposed plugin file", () => {
     const home = freshHome();
-    const pluginPath = join(home, "railguard.js");
+    const pluginPath = join(home, "reins.js");
     runCli(["init", "opencode", "--settings", pluginPath], { REINS_HOME: home });
     writeFileSync(pluginPath, "// my own stuff now, no reins marker");
 

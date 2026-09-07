@@ -3,8 +3,11 @@ import type { LlmConfig } from "./config.js";
 
 export class LlmNotConfiguredError extends Error {}
 
-/** Reject loopback / private / link-local targets for HTTP providers.
- *  Remote LLM endpoints only; local models go through the `command` provider. */
+/** Reject loopback / private / link-local / unspecified targets for HTTP
+ *  providers. Remote LLM endpoints only; local models go through the
+ *  `command` provider. Note: DNS-resolution pinning is a known limitation
+ *  (documented in docs/LLM.md) — a public hostname resolving to a private
+ *  IP at request time is not caught here. */
 export function assertPublicHttpUrl(raw: string): void {
   let url: URL;
   try {
@@ -15,20 +18,44 @@ export function assertPublicHttpUrl(raw: string): void {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error(`LLM endpoint must be http/https: ${raw}`);
   }
-  const host = url.hostname.toLowerCase();
-  const privateHost =
-    host === "localhost" ||
-    host.endsWith(".local") ||
-    host === "::1" ||
-    host.startsWith("127.") ||
-    host.startsWith("10.") ||
-    host.startsWith("192.168.") ||
-    host.startsWith("169.254.") ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host);
-  if (privateHost) {
-    throw new Error(
-      `LLM endpoint points at a loopback/private address (${host}) — use the command provider for local models`,
-    );
+  if (url.port === "0") {
+    throw new Error(`LLM endpoint port 0 is not allowed`);
+  }
+  // strip IPv6 brackets: [::1] -> ::1
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const v4 = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(host);
+  if (host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) {
+    throw new Error(`LLM endpoint points at a loopback/local hostname (${host})`);
+  }
+  if (v4) {
+    const parts = host.split(".").map((s) => Number(s));
+    const [a, b] = parts as [number, number, ...number[]];
+    const privateV4 =
+      a === 0 || // "this network" / unspecified (0.0.0.0)
+      a === 10 ||
+      (a === 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168);
+    if (privateV4) {
+      throw new Error(`LLM endpoint points at a private/loopback address (${host})`);
+    }
+  }
+  if (host.includes(":")) {
+    // IPv6 literal: reject unspecified, loopback, link-local (fe80), ULA
+    // (fc/fd), and ALL IPv4-mapped forms — WHATWG URL normalizes
+    // [::ffff:127.0.0.1] to hex (e.g. ::ffff:7f00:1), so prefix matching on
+    // the dotted form is not enough
+    const bad =
+      host === "::" ||
+      host === "::1" ||
+      host.startsWith("fe80") ||
+      host.startsWith("fc") ||
+      host.startsWith("fd") ||
+      host.startsWith("::ffff:");
+    if (bad) {
+      throw new Error(`LLM endpoint points at a loopback/private IPv6 address (${host})`);
+    }
   }
 }
 
@@ -59,6 +86,9 @@ async function completeViaCommand(prompt: string, cfg: LlmConfig): Promise<strin
     }, cfg.timeoutSeconds * 1000);
     child.stdout?.on("data", (d) => (out += String(d)));
     child.stderr?.on("data", (d) => (err += String(d)));
+    // the provider may exit before reading the whole prompt — swallow EPIPE
+    // on our side and judge by the exit code / output instead
+    child.stdin?.on("error", () => {});
     child.on("error", (e) => {
       clearTimeout(timer);
       reject(new Error(`LLM command failed: ${e.message}`));
@@ -98,6 +128,8 @@ async function completeViaOpenAi(prompt: string, cfg: LlmConfig): Promise<string
       messages: [{ role: "user", content: prompt }],
       temperature: 0,
     }),
+    // a public endpoint 302-ing to an internal address must not be followed
+    redirect: "error",
     signal: AbortSignal.timeout(cfg.timeoutSeconds * 1000),
   });
   if (!res.ok) {

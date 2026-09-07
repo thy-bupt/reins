@@ -73,3 +73,11 @@ jobs:
       - run: npm install -g /tmp/reins-*.tgz
       - run: reins --version
       - run: reins policy eval "npm test"
+      - name: full lifecycle smoke (isolated HOME)
+        run: |
+          export HOME=$(mktemp -d)
+          reins init claude
+          echo '{"session_id":"ci","tool_name":"Bash","tool_input":{"command":"rm -rf /x"}}' | reins hook claude; echo "hook exit=$? (expect 2)"
+          reins trace export --format ndjson | grep -q rm-recursive
+          reins uninstall claude
+          ! grep -q "reins hook" "$HOME/.claude/settings.json"

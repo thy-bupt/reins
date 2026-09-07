@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -53,6 +53,12 @@ describe("assertPublicHttpUrl", () => {
       expect(() => assertPublicHttpUrl(bad), bad).toThrow();
     }
   });
+
+  it("rejects unspecified, IPv4-mapped, ULA and link-local IPv6 endpoints (round-4 review)", () => {
+    for (const bad of ["http://0.0.0.0:8080", "http://[::ffff:127.0.0.1]:8080", "http://[fc00::1]:8080", "http://[fe80::1]:8080", "http://[::1]:9000"]) {
+      expect(() => assertPublicHttpUrl(bad), bad).toThrow();
+    }
+  });
 });
 
 describe("parseProposals", () => {
@@ -84,7 +90,7 @@ describe("validateProposal (deterministic verification of LLM output)", () => {
 
   it("rejects a proposal that would block an innocent corpus command", () => {
     const verdict = validateProposal(
-      { kind: "command", action: "deny", program: "echo", pattern: "rm -rf", reason: "blocks echo of scary text" },
+      { kind: "command", action: "deny", pattern: "rm -rf", reason: "blocks echo of scary text" },
       existing,
       [],
     );
@@ -150,3 +156,132 @@ function mkdtempSyncDir(): string {
   mkdirSync(dir, { recursive: true });
   return dir;
 }
+
+
+describe("round-4 review hardening (proposals)", () => {
+  const existing = loadPolicy("version: 1\ndefault: allow\nrules: []\n");
+
+  it("rejects YAML injection attempts inside reason", () => {
+    const verdict = validateProposal(
+      {
+        kind: "command",
+        action: "deny",
+        program: "mkfs",
+        reason: 'safe"\n  - id: injected\n    kind: command\n    action: deny\n    program: echo\n    reason: injected',
+      },
+      existing,
+      [],
+    );
+    expect(verdict.accepted).toBe(false);
+    expect(verdict.problems.some((p) => p.includes("control characters"))).toBe(true);
+  });
+
+  it("accepts legitimate proposals and marks provenance in reason", () => {
+    const verdict = validateProposal(
+      { kind: "command", action: "deny", program: "mkfs", reason: "formats filesystems" },
+      existing,
+      [],
+    );
+    expect(verdict.accepted).toBe(true);
+    expect(verdict.rule?.reason).toContain("[llm-suggested");
+  });
+
+  it("rejects an overly broad path rule", () => {
+    const verdict = validateProposal(
+      { kind: "path", action: "deny", path: "**", reason: "block all files" },
+      existing,
+      [],
+    );
+    expect(verdict.accepted).toBe(false);
+    expect(verdict.problems.some((p) => p.includes("overly broad"))).toBe(true);
+  });
+
+  it("path false-positive corpus catches innocent-path blocking rules", () => {
+    const verdict = validateProposal(
+      { kind: "path", action: "deny", path: "**/README.md", reason: "no readmes" },
+      existing,
+      [],
+    );
+    expect(verdict.accepted).toBe(false);
+    expect(verdict.problems.some((p) => p.includes("false positive"))).toBe(true);
+  });
+
+  it("caps proposals at 3", () => {
+    const many = JSON.stringify({
+      proposals: [1, 2, 3, 4, 5].map((i) => ({
+        kind: "command",
+        action: "deny",
+        program: `prog${i}`,
+        reason: `r${i}`,
+      })),
+    });
+    expect(parseProposals(many)).toHaveLength(3);
+  });
+});
+
+describe.skipIf(!cli)("suggest --apply e2e (round-4 P0-1 regression)", () => {
+  const PROPOSALS = JSON.stringify({
+    proposals: [{ kind: "command", action: "deny", program: "mkfs", reason: "formats filesystems" }],
+  });
+  // fake provider script: discard the prompt on stdin, emit fixed proposals JSON
+  function setup(h: string, initialPolicy: string) {
+    writeFileSync(join(h, "policy.yaml"), initialPolicy);
+    writeFileSync(join(h, "config.yaml"), "llm:\n  provider: command\n  command: cat " + join(h, "fake-llm.json") + "\n");
+    // `cat <file>` ignores stdin and always prints the same proposals — a
+    // deterministic fake LLM
+    writeFileSync(join(h, "fake-llm.json"), PROPOSALS);
+  }
+
+  it("apply on rules: [] produces a valid policy that the hook then loads", async () => {
+    const h = mkdtempSyncDir();
+    setup(h, "version: 1\ndefault: allow\nrules: []\n");
+    const apply = spawnSync(process.execPath, [DIST, "suggest", "--apply"], {
+      env: { ...process.env, REINS_HOME: h },
+      encoding: "utf8",
+    });
+    expect(apply.status, `apply failed: ${apply.stderr}`).toBe(0);
+
+    const hook = spawnSync(process.execPath, [DIST, "hook", "claude"], {
+      env: { ...process.env, REINS_HOME: h },
+      input: JSON.stringify({ session_id: "post-apply", tool_name: "Bash", tool_input: { command: "mkfs /dev/sda1" } }),
+      encoding: "utf8",
+    });
+    expect(hook.status).toBe(2);
+    expect(hook.stderr).toContain("llm-");
+    expect(hook.stderr).toContain("formats filesystems");
+  });
+
+  it("apply on a policy with existing rules keeps both old and new", async () => {
+    const h = mkdtempSyncDir();
+    setup(
+      h,
+      "version: 1\ndefault: allow\nrules:\n  - id: rm-recursive\n    kind: command\n    action: deny\n    program: rm\n    flags: [\"-r\"]\n    reason: pre-existing\n",
+    );
+    const apply = spawnSync(process.execPath, [DIST, "suggest", "--apply"], {
+      env: { ...process.env, REINS_HOME: h },
+      encoding: "utf8",
+    });
+    expect(apply.status).toBe(0);
+
+    const policy = loadPolicy(readFileSync(join(h, "policy.yaml"), "utf8"));
+    const ids = policy.rules.map((r) => r.id);
+    expect(ids).toContain("rm-recursive");
+    expect(ids.some((id) => id.startsWith("llm-"))).toBe(true);
+  });
+
+  it("an all-rejected round leaves policy.yaml byte-identical", async () => {
+    const h = mkdtempSyncDir();
+    const original = "version: 1\ndefault: allow\nrules: []\n";
+    writeFileSync(join(h, "policy.yaml"), original);
+    // over-broad path proposal → rejected by validation
+    writeFileSync(join(h, "config.yaml"), "llm:\n  provider: command\n  command: cat " + join(h, "fake.json") + "\n");
+    writeFileSync(join(h, "fake.json"), JSON.stringify({ proposals: [{ kind: "path", action: "deny", path: "**", reason: "block all" }] }));
+
+    const apply = spawnSync(process.execPath, [DIST, "suggest", "--apply"], {
+      env: { ...process.env, REINS_HOME: h },
+      encoding: "utf8",
+    });
+    expect(apply.status).toBe(1);
+    expect(readFileSync(join(h, "policy.yaml"), "utf8")).toBe(original);
+  });
+});

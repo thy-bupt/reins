@@ -3,6 +3,36 @@
 All notable changes to reins are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is SemVer.
 
+## [0.3.1] - 2026-09-07
+
+Round-4 independent review fixes. The deterministic core from 0.3.0 is
+unchanged; all fixes carry regression tests (255 tests total).
+
+### Fixed
+- **`reins suggest --apply` corrupted empty policies** — appends are now a
+  structured merge: accepted Rule objects are appended to the policy AST,
+  re-serialized with the yaml library, and round-tripped through
+  `loadPolicy` before an atomic write; any failure leaves the original
+  bytes untouched (regression: `rules: []` + --apply produced invalid YAML)
+- **YAML injection via LLM proposals** — proposals no longer hand-build
+  YAML; field sanitization (length/control chars), over-broad path rejection
+  (`**` and friends), path false-positive corpus, 3-proposal cap and
+  `[llm-suggested <date>]` provenance added
+- **MCP server now reads the llm config** — `suggest_alternative`'s LLM
+  fallback actually engages when a provider is configured (was hardcoded
+  to none); MCP server version now tracks the package version
+- **`--session` is honored** by `reins suggest` (was declared but ignored)
+- **Privacy: LLM prompts are redacted** — `suggest`/`explain` send
+  secret-redacted commands and `~`-folded paths; explain uses a dedicated
+  LLM-safe renderer (no absolute paths, no diffs); report files written 0600
+
+### Security
+- **Lock stealing never snatches a live writer** — dead-pid check on every
+  steal; unparseable locks get a 30s grace window
+- **`openai` endpoint hardening** — unspecified/IPv4-mapped/ULA/link-local
+  IPv6 and `0.0.0.0` rejected; redirects refused (`redirect: "error"`);
+  DNS-resolution pinning documented as a known limitation
+
 ## [0.3.0] - 2026-09-07
 
 ### Added

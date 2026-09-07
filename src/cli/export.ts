@@ -1,5 +1,7 @@
-import { createHash } from "node:crypto";
+import { commandDigest, redactCommand } from "../core/redact.js";
 import type { VerifyResult, TraceEvent } from "../core/trace.js";
+
+export { redactCommand, commandDigest };
 
 export interface EvidenceRecord {
   schema: "reins.evidence/v1";
@@ -30,23 +32,6 @@ export interface EvidenceRecord {
   integrity_reason: string | null;
   integrity_broken_at: number | null;
   generated_by: string;
-}
-
-const SECRET_PATTERNS: Array<[RegExp, string]> = [
-  [/Bearer\s+[A-Za-z0-9._~+/=-]{6,}/gi, "Bearer [REDACTED]"],
-  [/\b(?:sk|pk)-[A-Za-z0-9]{8,}/g, "[REDACTED-KEY]"],
-  [/\bAKIA[0-9A-Z]{16}\b/g, "[REDACTED-AWS-KEY]"],
-  [
-    /\b(api[_-]?key|token|password|passwd|secret|authorization)\s*[=:]\s*"?[^\s"'&]{4,}/gi,
-    "$1=[REDACTED]",
-  ],
-  [/\b(?:ghp|github_pat)_[A-Za-z0-9_]{10,}/g, "[REDACTED-GITHUB-TOKEN]"],
-];
-
-export function redactCommand(command: string): string {
-  let out = command;
-  for (const [re, rep] of SECRET_PATTERNS) out = out.replace(re, rep);
-  return out;
 }
 
 function reasonSlug(reason: string | null | undefined): string | null {
@@ -94,7 +79,7 @@ export function buildEvidenceRecords(
       tool: e.tool,
       command,
       command_redacted: rawCommand !== null && command !== rawCommand,
-      command_digest: rawCommand === null ? null : createHash("sha256").update(rawCommand).digest("hex"),
+      command_digest: rawCommand === null ? null : commandDigest(rawCommand),
       file_path: typeof input["file_path"] === "string" ? String(input["file_path"]) : null,
       decision: e.decision,
       matched_rule: e.matchedRule ?? null,

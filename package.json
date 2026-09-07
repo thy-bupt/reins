@@ -1,6 +1,6 @@
 {
   "name": "reins",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Fail-closed safety rail for AI coding agents: declarative policy engine, tamper-evident trace, session replay. Agent-agnostic, local-first.",
   "type": "module",
   "license": "Apache-2.0",
@@ -15,8 +15,6 @@
     "policies",
     "skills"
   ],
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
@@ -54,5 +52,6 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.69.0",
     "vitest": "^5.0.0"
-  }
+  },
+  "prepack": "npm run build"
 }

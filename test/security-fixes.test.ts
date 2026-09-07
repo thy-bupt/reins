@@ -119,7 +119,7 @@ describe("privacy e2e: Write content never reaches the ledger", () => {
 describe("installer config preservation (Codex finding 4.1/4.2)", () => {
   it("init opencode refuses to overwrite a foreign plugin file", async () => {
     const h = home();
-    const pluginPath = join(h, "railguard.js");
+    const pluginPath = join(h, "reins.js");
     writeFileSync(pluginPath, "// USER CODE — do not touch");
     const init = spawnSync(process.execPath, [DIST, "init", "opencode", "--settings", pluginPath], {
       env: { ...process.env, REINS_HOME: h },

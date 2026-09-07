@@ -15,7 +15,7 @@ llm:
   provider: none | command | openai     # 默认 none
   command: "ollama run qwen2.5-coder:7b"  # provider=command：stdin 喂 prompt，stdout 收响应
   openai:
-    baseUrl: https://api.openai.com/v1   # 兼容端点亦可（含本地 vLLM）
+    baseUrl: https://api.openai.com/v1   # 兼容端点亦可（远程公网端点）
     model: gpt-4o-mini
     apiKeyEnv: REINS_LLM_API_KEY          # 密钥只从环境变量
   timeoutSeconds: 60
@@ -80,7 +80,7 @@ reins suggest [--session <file>] [--last N] [--out rules.yaml] [--apply]
 ## 5. `reins explain` —— 事故叙事生成
 
 ```bash
-reins explain [--session <file>] [--audience dev|audit]
+reins explain [file] [--audience dev|audit]
 ```
 
 输入：snapshot 的结构化摘要（已脱敏）；输出：markdown 事故叙事。

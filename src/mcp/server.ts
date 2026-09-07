@@ -1,16 +1,25 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { createRequire } from "node:module";
 import { resolvePolicyPath, sessionsDir } from "../core/home.js";
+import { loadLlmConfig } from "../llm/config.js";
 import { createToolHandlers } from "./tools.js";
+
+const require = createRequire(import.meta.url);
+const VERSION: string = require("../../package.json").version;
 
 /** Read-only MCP surface over the reins core. Enforcement never lives here:
  *  the PreToolUse hook decides regardless of what this server answers. */
 export async function runMcpServer(): Promise<void> {
-  const ctx = { policyPath: resolvePolicyPath(), sessionsDir: sessionsDir() };
+  const ctx = {
+    policyPath: resolvePolicyPath(),
+    sessionsDir: sessionsDir(),
+    llmConfig: loadLlmConfig(),
+  };
   const handlers = createToolHandlers(ctx);
 
-  const server = new McpServer({ name: "reins", version: "0.2.0" });
+  const server = new McpServer({ name: "reins", version: VERSION });
 
   server.tool(
     "check_command",

@@ -28,7 +28,7 @@ async function getClient(): Promise<Client> {
     args: [DIST, "mcp"],
     env: { ...process.env, REINS_HOME: home },
   });
-  client = new Client({ name: "reins-test", version: "0.0.0" });
+  client = new Client({ name: "reins-test", version: "0" });
   await client.connect(transport);
   return client;
 }
@@ -43,6 +43,12 @@ describe.skipIf(!cli)("reins mcp server (protocol e2e)", () => {
     const tools = await c.listTools();
     const names = tools.tools.map((t) => t.name).sort();
     expect(names).toEqual(["check_command", "policy_summary", "recent_decisions", "stats", "suggest_alternative"]);
+  });
+
+  it("reports the current server version via MCP (round-4: no hardcoded 0.2.0)", async () => {
+    const c = await getClient();
+    const info = await c.getServerVersion();
+    expect(info.version).toBe("0.3.1");
   });
 
   it("check_command previews a denial over the wire", async () => {
@@ -68,5 +74,54 @@ describe.skipIf(!cli)("reins mcp server (protocol e2e)", () => {
     const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
     expect(text).toContain('"deny": 1');
     expect(text).toContain('"tamperedSessions": 0');
+  });
+
+  it("suggest_alternative uses the deterministic table over the wire", async () => {
+    const c = await getClient();
+    const result = await c.callTool({
+      name: "suggest_alternative",
+      arguments: { command: "git push --force origin main" },
+    });
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
+    expect(text).toContain("force-with-lease");
+    expect(text).toContain("deterministic");
+  });
+});
+
+describe.skipIf(!cli)("MCP LLM fallback wiring (round-4 finding: server must read llm config)", () => {
+  it("suggest_alternative uses the configured command provider and re-checks candidates", async () => {
+    const llmHome = join(tmpdir(), `reins-mcp-llm-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(llmHome, { recursive: true });
+    writeFileSync(join(llmHome, "policy.yaml"), "version: 1\ndefault: allow\nrules: []\n");
+    // fake LLM provider: a command that always proposes "npm ci" (an allowed command)
+    writeFileSync(
+      join(llmHome, "config.yaml"),
+      [
+        "llm:",
+        "  provider: command",
+        "  command: printf '%s' '{\"alternatives\":[\"npm ci\"]}'",
+        "",
+      ].join("\n"),
+    );
+
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [DIST, "mcp"],
+      env: { ...process.env, REINS_HOME: llmHome },
+    });
+    const c = new Client({ name: "reins-llm-test", version: "0" });
+    await c.connect(transport);
+    try {
+      const result = await c.callTool({
+        name: "suggest_alternative",
+        arguments: { command: "mkfs /dev/sda1" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
+      expect(text).toContain('"source": "llm"');
+      expect(text).toContain('"llmUsed": true');
+      expect(text).toContain("npm ci");
+    } finally {
+      await c.close();
+    }
   });
 });
