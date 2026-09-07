@@ -153,6 +153,7 @@ Rules are evaluated in order; **first match wins**. `ask` shows the agent's requ
 | `reins replay [file] --policy <p>` | re-evaluate a session under another policy, block report |
 | `reins snapshot [file] --with-diffs` | forensic report: timeline + git state + recovery hints |
 | `reins suggest` | optional LLM: propose policy rules from ledger patterns (docs/LLM.md) |
+| `reins ui` | interactive session browser — colored timelines, event drill-in (bare `reins` in a TTY opens it too) |
 | `reins explain [file]` | optional LLM: incident narrative from a session snapshot |
 | `reins uninstall <agent>` | remove the reins hook cleanly (foreign hooks preserved) |
 
@@ -249,7 +250,7 @@ not a claim of being the only fail-closed hook. Those three properties compose i
 - [ ] **Policy integrity** — sign `policy.yaml` (hash anchored in the ledger) so a rogue agent can't weaken its own guard
 - [ ] More agents: Cursor, Aider, Windsurf …
 - [ ] Secret-leak detection rules (deny reads/writes that move credential material into commands)
-- [ ] TUI session viewer
+- [x] TUI-flavored interactive session browser (v0.4)
 - [x] MCP server exposing trace queries to agents (`reins mcp`, v0.2)
 - [ ] Policy registry: shareable preset policies per stack
 

@@ -3,6 +3,16 @@
 All notable changes to reins are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is SemVer.
 
+## [0.4.0] - 2026-09-07
+
+### Added
+- **Interactive session browser** — bare `reins` (in a TTY) and `reins ui`
+  open a colored session browser: session picker with event counts and
+  integrity flags, color-coded decision timelines (green/yellow/red),
+  event drill-in detail cards (policy digest, drift flags, event hash),
+  in-place chain re-verification. Non-TTY stdout and `NO_COLOR` degrade to
+  plain output automatically.
+
 ## [0.3.2] - 2026-09-07
 
 Round-5 independent review fixes. All carry regression tests (285 total).
