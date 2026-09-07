@@ -142,12 +142,19 @@ Rules are evaluated in order; **first match wins**. `ask` shows the agent's requ
 
 | command | what it does |
 | --- | --- |
-| `reins init <agent>` | installs the policy + hook for an agent — `claude`, `gemini`, `codex`, `grok`, `opencode`, `pi` (backs up originals) |
+| `reins init <agent>` | installs the policy + hook for an agent — `claude`, `gemini`, `codex`, `grok`, `opencode`, `pi`, or component — `skills`, `mcp` (backs up originals) |
 | `reins hook <agent>` | hook entrypoint (agents call this; you normally don't) |
 | `reins exec -- <cmd>` | run any command under the policy — works from scripts, CI, other agents |
 | `reins trace list` / `trace verify [file]` | list sessions / verify a session's hash chain |
-| `reins doctor` | full health check: policy, hook, traces |
+| `reins trace show [file]` | human-readable ledger timeline in your terminal |
+| `reins trace export [file]` | schema-v1 evidence export (ndjson / json), secret-redacted by default |
+| `reins policy eval "cmd"` / `--file <p>` | dry-run a decision against the policy — never executes |
+| `reins doctor` / `--all` / `--agent <name>` | full health check: policy, hook, all agents, traces |
 | `reins replay [file] --policy <p>` | re-evaluate a session under another policy, block report |
+| `reins snapshot [file] --with-diffs` | forensic report: timeline + git state + recovery hints |
+| `reins suggest` | optional LLM: propose policy rules from ledger patterns (docs/LLM.md) |
+| `reins explain [file]` | optional LLM: incident narrative from a session snapshot |
+| `reins uninstall <agent>` | remove the reins hook cleanly (foreign hooks preserved) |
 
 Configuration: `REINS_HOME` overrides `~/.reins` (sessions + policy live there). `--policy <path>` overrides the policy per invocation.
 
@@ -243,7 +250,7 @@ not a claim of being the only fail-closed hook. Those three properties compose i
 - [ ] More agents: Cursor, Aider, Windsurf …
 - [ ] Secret-leak detection rules (deny reads/writes that move credential material into commands)
 - [ ] TUI session viewer
-- [ ] MCP server exposing trace queries to agents
+- [x] MCP server exposing trace queries to agents (`reins mcp`, v0.2)
 - [ ] Policy registry: shareable preset policies per stack
 
 ## FAQ

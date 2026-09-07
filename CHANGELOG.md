@@ -3,6 +3,26 @@
 All notable changes to reins are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is SemVer.
 
+## [0.3.2] - 2026-09-07
+
+Round-5 independent review fixes. All carry regression tests (285 total).
+
+### Fixed
+- **Ledger directory boundary (P0)** — `sessions/` or REINS_HOME being
+  symlinks is now rejected at open/append; ledger directories self-heal to
+  mode 0700
+- **Leaf append TOCTOU closed** — appends open the ledger with `O_NOFOLLOW`
+  and verify dev/ino identity between check and write
+- **`init` now creates `.reins` and `sessions/` with mode 0700** (was 0755)
+  and self-heals pre-existing world-readable dirs
+- **`suggest --session` no longer leaks sibling sessions** — the summary is
+  built from the exact caller-selected file list
+- **LLM outbound paths anonymized** — home paths fold to `~/...`; other
+  absolute paths collapse to `<ABS_PATH>/basename` (suggest + explain)
+- **MCP `suggest_alternative` redacts the denied command** before building
+  the LLM prompt
+- **npm packaging** — `scripts.prepack` is now `npm run build`
+
 ## [0.3.1] - 2026-09-07
 
 Round-4 independent review fixes. The deterministic core from 0.3.0 is
