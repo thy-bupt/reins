@@ -233,6 +233,13 @@ describe("decide: shipped default policy", () => {
     expect(decide(defaultPolicy, bash("git push --force")).decision).toBe("deny");
   });
 
+  it("protects terraform state files (learned from a real terraform repo)", () => {
+    expect(decide(defaultPolicy, write("/repo/terraform.tfstate")).decision).toBe("deny");
+    expect(decide(defaultPolicy, write("/repo/prod/eu1.tfstate.backup")).decision).toBe("deny");
+    expect(decide(defaultPolicy, write("/repo/.terraform/providers/x")).decision).toBe("deny");
+    expect(decide(defaultPolicy, write("/repo/main.tf")).decision).toBe("allow");
+  });
+
   it("protects secrets and ssh key material", () => {
     expect(decide(defaultPolicy, write("/repo/.env")).decision).toBe("deny");
     expect(decide(defaultPolicy, write("/Users/dev/.ssh/id_ed25519")).decision).toBe("deny");

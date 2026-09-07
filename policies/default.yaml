@@ -90,3 +90,23 @@ rules:
     action: deny
     path: "**/.git/**"
     reason: "Git internals — use git commands instead of editing .git"
+
+  # terraform state files carry secrets (resource attributes, sensitive values)
+  # and must never be hand-edited — discovered from a real terraform repository
+  - id: protect-terraform-state
+    kind: path
+    action: deny
+    path: "**/*.tfstate*"
+    reason: "Terraform state contains secrets — manage it with terraform, never edit it directly"
+
+  - id: protect-terraform-dir
+    kind: path
+    action: deny
+    path: "**/.terraform/**"
+    reason: "Terraform working directory (providers, lock files) — managed by terraform init"
+
+  - id: protect-terraform-vars
+    kind: path
+    action: ask
+    path: "**/*.auto.tfvars"
+    reason: "Auto-loaded tfvars may contain secrets — human decides"
