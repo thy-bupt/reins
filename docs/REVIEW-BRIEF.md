@@ -24,7 +24,7 @@ guard 工具阻断动作，reins 证明"请求了什么、依据什么策略、�
 | 项 | 值 |
 | --- | --- |
 | 版本 | 0.3.1（npm 未发布，名称可用） |
-| 测试 | **268/268**（26 个文件：绕过语料、并发账本、symlink、篡改追加、隐私、权限、六 agent 矩阵、MCP 协议级、apply 全链路） |
+| 测试 | **274/274**（27 个文件：绕过语料、并发账本、symlink、篡改追加、隐私、权限、六 agent 矩阵、MCP 协议级、apply 全链路、doctor 项目作用域检查） |
 | CI | ubuntu (node 20/22/24) + windows-latest + macos-latest + 打包冒烟 + 隔离 HOME 全生命周期冒烟 |
 | 运行时依赖 | 6 个（commander/yaml/picomatch/shell-quote/zod/@modelcontextprotocol/sdk） |
 | 平台实测 | macOS 全量 ✅ · Windows 真机 154/154（v0.3.1 新增项待复验）· Linux 覆盖于 CI |
@@ -77,7 +77,11 @@ guard 工具阻断动作，reins 证明"请求了什么、依据什么策略、�
 - hook 就位轮：真实 `rm -rf` DENY，agent 引用规则名与理由，受害目录完好
 - 价值证明：**agent 的口头汇报不可信，账本是 ground truth**
 
-### 5.3 terraform-aws-vpc —— 盲区发现 → 迭代 → 漂移检测实战
+### 5.3 terraform-aws-vpc —— 盲区发现 → 迭代 → 漂移检测实战 + 未保护项目事故
+
+**事故**：tf-vpc 会话前遗漏 `reins init`——agent 真实写出 `terraform.tfstate`，
+账本零记录。由此新增 doctor **project-hook 检查**（项目级 Claude 配置无 reins
+hook 时告警"agent sessions here are unrecorded"），并在装 hook 后重放验证拦截。
 
 1. 真实仓库暴露策略盲区：写 `terraform.tfstate`（含敏感数据）默认放行
 2. 出厂策略迭代：新增 tfstate / `.terraform/` / `*.auto.tfvars`(ask) / `*.pem` / `*.key` 五类保护（出厂规则 13 → 18 条），各带误报对照测试
