@@ -3,12 +3,15 @@ import { join } from "node:path";
 import * as clack from "@clack/prompts";
 import { summarizeEvent } from "../cli/snapshot.js";
 import { readTrace, verifyTrace, type TraceEvent } from "../core/trace.js";
+import { c } from "./colors.js";
 import { renderEventDetail, renderTimeline } from "./render.js";
+import { strings, type Lang, type UiStrings } from "./i18n.js";
 
 export interface UiContext {
   sessionsDir: string;
   policyPath: string;
   version: string;
+  lang: Lang;
 }
 
 interface SessionFile {
@@ -17,6 +20,7 @@ interface SessionFile {
   events: TraceEvent[];
   integrity: { ok: boolean; events: number; brokenAt?: number; reason?: string };
   driftCount: number;
+  mtimeMs: number;
 }
 
 async function listSessions(sessionsDir: string): Promise<SessionFile[]> {
@@ -26,64 +30,65 @@ async function listSessions(sessionsDir: string): Promise<SessionFile[]> {
     const path = join(sessionsDir, name);
     const events = await readTrace(path);
     const integrity = await verifyTrace(path);
-      const drifts = new Set(
-        events.map((e: TraceEvent) => e.policyDigest).filter((d: unknown): d is string => typeof d === "string"),
-      );
-      out.push({
-        name,
-        path,
-        events,
-        integrity,
-        driftCount: drifts.size > 1 ? drifts.size : 0,
-      });
+    const drifts = new Set(
+      events.map((e: TraceEvent) => e.policyDigest).filter((d: unknown): d is string => typeof d === "string"),
+    );
+    out.push({
+      name,
+      path,
+      events,
+      integrity,
+      driftCount: drifts.size > 1 ? drifts.size : 0,
+      mtimeMs: statSync(path).mtimeMs,
+    });
   }
-  return out.sort((a, b) => statSync(b.path).mtimeMs - statSync(a.path).mtimeMs);
+  return out.sort((a, b) => b.mtimeMs - a.mtimeMs);
 }
 
 /** Interactive session browser: pick a session → colored timeline → drill
- *  into an event. Only runs in a real TTY (clack prompts need one); callers
- *  must fall back to plain output otherwise. Read-only — no enforcement,
- *  no LLM, no network. */
+ *  into an event. Bilingual (en/zh). Read-only — no enforcement, no LLM,
+ *  no network. */
 export async function runUi(ctx: UiContext): Promise<void> {
-  clack.intro(`reins ${ctx.version} — session browser`);
+  const s = strings(ctx.lang);
+  clack.intro(`${c.bold(`reins ${ctx.version}`)} — ${s.appTitle}`);
 
   if (!existsSync(ctx.sessionsDir) || (await listSessions(ctx.sessionsDir)).length === 0) {
-    clack.log.warn("no sessions yet — agent decisions will appear here once a reins-protected agent runs");
-    clack.outro("done");
+    clack.log.warn(s.noSessions);
+    clack.outro(s.exit);
     return;
   }
 
   let running = true;
   while (running) {
     const sessions = await listSessions(ctx.sessionsDir);
-    const options: Array<{ value: string; label: string; hint?: string }> = sessions.map((s, i) => ({
+    const options: Array<{ value: string; label: string; hint?: string }> = sessions.map((sess, i) => ({
       value: String(i),
-      label: s.name,
-      hint: `${s.events.length} events${s.integrity.ok ? "" : " · TAMPERED"}${s.driftCount ? " · drift" : ""}`,
+      label: sess.name,
+      hint: `${sess.events.length} ${s.eventsLabel}${sess.integrity.ok ? "" : s.tamperedLabel}${sess.driftCount ? s.driftLabel : ""}`,
     }));
-    options.push({ value: "__exit__", label: "退出 Exit" });
+    options.push({ value: "__exit__", label: s.exit });
 
-    const picked = await clack.select({ message: "选择会话 Session", options });
+    const picked = await clack.select({ message: s.selectSession, options });
     if (clack.isCancel(picked) || picked === "__exit__") {
       running = false;
       continue;
     }
     const chosen = sessions[Number(picked)]!;
-    await browseSession(chosen);
+    await browseSession(chosen, s);
   }
-  clack.outro("done");
+  clack.outro(s.exit);
 }
 
-async function browseSession(chosen: SessionFile): Promise<void> {
+async function browseSession(chosen: SessionFile, s: UiStrings): Promise<void> {
   let back = false;
   while (!back) {
     const act = await clack.select({
       message: chosen.name,
       options: [
-        { value: "timeline", label: "时间线 Timeline", hint: "colored decision timeline" },
-        { value: "events", label: "事件详情 Events", hint: "drill into a single decision" },
-        { value: "verify", label: "校验 Verify", hint: "re-verify the hash chain now" },
-        { value: "back", label: "返回 Back" },
+        { value: "timeline", label: s.actionTimeline, hint: s.actionTimelineHint },
+        { value: "events", label: s.actionEvents, hint: s.actionEventsHint },
+        { value: "verify", label: s.actionVerify, hint: s.actionVerifyHint },
+        { value: "back", label: s.actionBack },
       ],
     });
     if (clack.isCancel(act) || act === "back") {
@@ -97,16 +102,17 @@ async function browseSession(chosen: SessionFile): Promise<void> {
           integrityOk: chosen.integrity.ok,
           integrityNote: chosen.integrity.reason,
           driftCount: chosen.driftCount,
+          strings: s,
         }),
       );
     }
     if (act === "events") {
       if (chosen.events.length === 0) {
-        clack.log.warn("(empty session)");
+        clack.log.warn(s.emptySession);
         continue;
       }
       const pick = await clack.select({
-        message: "选择事件 Event",
+        message: s.actionEvents,
         options: chosen.events.map((e) => ({
           value: String(e.seq),
           label: `#${e.seq} ${e.decision.toUpperCase()} ${e.tool}`,
@@ -115,14 +121,12 @@ async function browseSession(chosen: SessionFile): Promise<void> {
       });
       if (clack.isCancel(pick)) continue;
       const chosenEvent = chosen.events[Number(pick)]!;
-      clack.note(renderEventDetail(chosenEvent), `event #${chosenEvent.seq}`);
+      clack.note(renderEventDetail(chosenEvent, s), `event #${chosenEvent.seq}`);
     }
     if (act === "verify") {
       const integrity = await verifyTrace(chosen.path);
       clack.log[integrity.ok ? "info" : "error"](
-        integrity.ok
-          ? `✔ ${integrity.events} events, chain intact`
-          : `✗ TAMPERED: ${integrity.reason} at event ${integrity.brokenAt}`,
+        integrity.ok ? s.verifyOk(integrity.events) : s.verifyFail(integrity.reason ?? "", integrity.brokenAt),
       );
     }
   }

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetColorCache, c } from "../src/tui/colors.js";
 import { renderTimeline, renderEventDetail } from "../src/tui/render.js";
+import { strings } from "../src/tui/i18n.js";
 import { GENESIS_HASH, type TraceEvent } from "../src/core/trace.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -70,6 +71,7 @@ describe("renderTimeline (colored, TUI-flavored)", () => {
       sourceLabel: "claude-demo.jsonl",
       integrityOk: true,
       driftCount: 0,
+      strings: strings("en"),
     });
     expect(out).toContain("claude-demo.jsonl");
     expect(out).toContain("hash chain intact");
@@ -85,6 +87,7 @@ describe("renderTimeline (colored, TUI-flavored)", () => {
       integrityOk: false,
       integrityNote: "hash mismatch",
       driftCount: 0,
+      strings: strings("en"),
     });
     expect(out).toContain("TAMPERED");
     expect(out).toContain("hash mismatch");
@@ -93,6 +96,7 @@ describe("renderTimeline (colored, TUI-flavored)", () => {
   it("renders event detail card with policy digest state", () => {
     const out = renderEventDetail(
       event(0, { policyDigest: "abcd1234", matchedRule: "rm-recursive", decision: "deny", reason: "destructive" }),
+      strings("en"),
     );
     expect(out).toContain("decision");
     expect(out).toContain("rm-recursive");

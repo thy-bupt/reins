@@ -25,7 +25,7 @@ import {
 } from "../adapters/common.js";
 import { runMcpServer } from "../mcp/server.js";
 import { SKILL_NAMES, installSkill, uninstallSkill } from "../skills/installer.js";
-import { loadLlmConfig } from "../llm/config.js";
+import { loadLlmConfig, readLang, writeLang } from "../llm/config.js";
 import { runSuggestPipeline } from "../llm/suggest.js";
 import { runExplain, buildLlmSnapshot } from "../llm/explain.js";
 import { runUi } from "../tui/ui.js";
@@ -134,9 +134,27 @@ program
   )
   .version(VERSION);
 
-// bare `reins` in a real terminal opens the interactive browser
+// bare `reins` in a real terminal opens the interactive browser (with
+// first-run language selection)
 if (process.argv.length <= 2 && process.stdout.isTTY && !process.env["NO_COLOR"]) {
-  await runUi({ sessionsDir: sessionsDir(), policyPath: resolvePolicyPath(), version: VERSION });
+  let lang = readLang();
+  if (!lang) {
+    const clack = await import("@clack/prompts");
+    const picked = await clack.select({
+      message: "选择界面语言 Language",
+      options: [
+        { value: "zh", label: "中文" },
+        { value: "en", label: "English" },
+      ],
+    });
+    if (typeof picked === "string") {
+      lang = picked;
+      writeLang(lang);
+    } else {
+      lang = "en";
+    }
+  }
+  await runUi({ sessionsDir: sessionsDir(), policyPath: resolvePolicyPath(), version: VERSION, lang });
   process.exit(0);
 }
 
@@ -144,7 +162,8 @@ program
   .command("ui")
   .description("interactive session browser (colored timelines, event drill-in)")
   .action(async () => {
-    await runUi({ sessionsDir: sessionsDir(), policyPath: resolvePolicyPath(), version: VERSION });
+    const lang = readLang() ?? "en";
+    await runUi({ sessionsDir: sessionsDir(), policyPath: resolvePolicyPath(), version: VERSION, lang });
   });
 
 program

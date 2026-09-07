@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
@@ -18,6 +18,8 @@ export const DEFAULT_LLM_CONFIG: LlmConfig = {
   timeoutSeconds: 60,
   maxOutputChars: 8000,
 };
+
+export type Lang = "en" | "zh";
 
 export function llmConfigPath(): string {
   return process.env["REINS_HOME"]
@@ -53,9 +55,7 @@ export function loadLlmConfig(configPath = llmConfigPath()): LlmConfig {
         ? {
             baseUrl: String((section["openai"] as Record<string, unknown>)["baseUrl"] ?? ""),
             model: String((section["openai"] as Record<string, unknown>)["model"] ?? ""),
-            apiKeyEnv: String(
-              (section["openai"] as Record<string, unknown>)["apiKeyEnv"] ?? "REINS_LLM_API_KEY",
-            ),
+            apiKeyEnv: String((section["openai"] as Record<string, unknown>)["apiKeyEnv"] ?? "REINS_LLM_API_KEY"),
           }
         : undefined,
     timeoutSeconds: typeof section["timeoutSeconds"] === "number" ? section["timeoutSeconds"] : 60,
@@ -72,4 +72,30 @@ export function loadLlmConfig(configPath = llmConfigPath()): LlmConfig {
     cfg.provider = "openai";
 
   return cfg;
+}
+
+/** Read the TUI language from config.yaml (`lang: en` or `lang: zh`).
+ *  Returns undefined if not set (first run). */
+export function readLang(configPath = llmConfigPath()): Lang | undefined {
+  if (!existsSync(configPath)) return undefined;
+  try {
+    const doc = parseYaml(readFileSync(configPath, "utf8")) as Record<string, unknown> | null;
+    if (doc?.["lang"] === "zh") return "zh";
+    if (doc?.["lang"] === "en") return "en";
+  } catch { /* ignore */ }
+  return undefined;
+}
+
+/** Persist `lang` into config.yaml without destroying llm section. */
+export function writeLang(lang: Lang, configPath = llmConfigPath()): void {
+  let doc: Record<string, unknown> = {};
+  if (existsSync(configPath)) {
+    try {
+      doc = (parseYaml(readFileSync(configPath, "utf8")) as Record<string, unknown>) ?? {};
+    } catch { doc = {}; }
+  }
+  doc["lang"] = lang;
+  const dir = configPath.substring(0, configPath.lastIndexOf("/")) || ".";
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  writeFileSync(configPath, JSON.stringify(doc, null, 2) + "\n", { encoding: "utf8", mode: 0o600 });
 }
