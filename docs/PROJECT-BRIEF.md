@@ -76,7 +76,7 @@ src/cli/       人类管理面（main / doctor / replay / snapshot / show）
 ## 5. 依赖与体积
 
 - 运行时依赖 6 个：commander / yaml / picomatch / shell-quote / zod / @modelcontextprotocol/sdk
-- 版本 0.3.1；`prepack` 钩子保证 npm tarball 一定包含 dist（CI 有 clean-package 冒烟）
+- 版本 0.3.2；`prepack` 钩子保证 npm tarball 一定包含 dist（CI 有 clean-package 冒烟）
 - hook 单次决策 ~40ms（冷 Node 进程，含启动/策略加载/匹配/记账）
 - 安装：`npm i -g reins`（或 `npx reins@latest`）
 

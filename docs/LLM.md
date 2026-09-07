@@ -29,7 +29,7 @@ llm:
 - `command`：reins 把 prompt 写入该命令的 stdin，读取 stdout 作为回复——
   任何能读 stdin 输出文本的程序都可以（本地模型推荐方式，完全离线）
 - `openai`：调用 `<baseUrl>/chat/completions`。**仅允许公网地址**——
-  loopback/私有/内网地址、IPv4-mapped 与 ULA IPv6、重定向均被拒绝；
+  loopback/私有/内网地址、IPv4-mapped 与 ULA IPv6、0.0.0.0、重定向均被拒绝；
   本地模型请用 `command` provider（已知限制：不做 DNS 解析后复查，见下）
 - 不存在配置文件或 `provider: none` → 建议类命令打印指引后以退出码 1 结束
 

@@ -23,8 +23,8 @@ guard 工具阻断动作，reins 证明"请求了什么、依据什么策略、�
 
 | 项 | 值 |
 | --- | --- |
-| 版本 | 0.3.1（npm 未发布，名称可用） |
-| 测试 | **274/274**（27 个文件：绕过语料、并发账本、symlink、篡改追加、隐私、权限、六 agent 矩阵、MCP 协议级、apply 全链路、doctor 项目作用域检查） |
+| 版本 | 0.3.2（npm 未发布，名称可用） |
+| 测试 | **274/274**（29 个文件：绕过语料、并发账本、symlink、篡改追加、隐私、权限、六 agent 矩阵、MCP 协议级、apply 全链路、doctor 项目作用域检查） |
 | CI | ubuntu (node 20/22/24) + windows-latest + macos-latest + 打包冒烟 + 隔离 HOME 全生命周期冒烟 |
 | 运行时依赖 | 6 个（commander/yaml/picomatch/shell-quote/zod/@modelcontextprotocol/sdk） |
 | 平台实测 | macOS 全量 ✅ · Windows 真机 154/154（v0.3.1 新增项待复验）· Linux 覆盖于 CI |
