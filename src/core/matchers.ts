@@ -197,19 +197,16 @@ export function compilePattern(pattern: string): RegExp {
 
 const matchCache = new Map<string, (p: string) => boolean>();
 
-/** Shell invocation per platform. posix = /bin/bash -c (or REINS_SHELL),
- *  win32 = cmd.exe /d /s /c (or an explicit override such as pwsh). */
+/** Shell invocation per platform — deliberately non-overridable.
+ *  posix = /bin/bash -c; win32 = literal cmd.exe /d /s /c. Letting the caller
+ *  or environment pick the interpreter would allow the policy-checked string
+ *  and the executed content to diverge (H1, security audit 2026-09-07). */
 export function resolveShellCommand(
   platform: "posix" | "win32",
   command: string,
-  shellOverride?: string,
 ): { file: string; args: string[] } {
-  if (shellOverride) {
-    return { file: shellOverride, args: ["-c", command] };
-  }
   if (platform === "win32") {
-    const comspec = process.env["ComSpec"] ?? "cmd.exe";
-    return { file: comspec, args: ["/d", "/s", "/c", command] };
+    return { file: "cmd.exe", args: ["/d", "/s", "/c", command] };
   }
   return { file: "/bin/bash", args: ["-c", command] };
 }

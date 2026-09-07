@@ -16,10 +16,12 @@ describe("resolveShellCommand (win32 vs posix)", () => {
     expect(args).toEqual(["/d", "/s", "/c", "echo hi"]);
   });
 
-  it("honors the shell override on any platform", () => {
-    const { file, args } = resolveShellCommand("win32", "echo hi", "C:\\Program Files\\PowerShell\\7\\pwsh.exe");
-    expect(file).toBe("C:\\Program Files\\PowerShell\\7\\pwsh.exe");
-    expect(args).toEqual(["-c", "echo hi"]);
+  it("uses literal cmd.exe on win32 — ComSpec is not honored (H1 fix)", () => {
+    process.env["ComSpec"] = "C:\\fake\\shell.exe";
+    const { file, args } = resolveShellCommand("win32", "echo hi");
+    delete process.env["ComSpec"];
+    expect(file).toBe("cmd.exe");
+    expect(args).toEqual(["/d", "/s", "/c", "echo hi"]);
   });
 
   it("leaves multi-line commands intact for the shell", () => {

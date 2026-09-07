@@ -140,10 +140,26 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
   const codexHooks = await readTextIfExists(agents.codexHooks);
   const codexConfig = await readTextIfExists(agents.codexConfig);
   if (agents.codexHooks || agents.codexConfig) {
+    // L1 (audit 2026-09-08): unparseable hooks.json means init would rebuild
+    // it from scratch — third-party entries would be lost; flag early
+    let unreadable = false;
+    if (codexHooks !== null) {
+      try {
+        JSON.parse(codexHooks);
+      } catch {
+        unreadable = true;
+      }
+    }
     const hooksOk = codexHooks !== null && hasCodexHook(codexHooks);
     const featureOk = codexConfig !== null && configTomlHasHooksEnabled(codexConfig);
     if (hooksOk && featureOk) {
       checks.push({ name: "agent:codex", status: "ok", detail: `installed (${agents.codexHooks})` });
+    } else if (unreadable) {
+      checks.push({
+        name: "agent:codex",
+        status: "warn",
+        detail: "hooks.json is not valid JSON — `reins init codex` would rebuild it from scratch and lose any third-party hooks; check the .reins-backup",
+      });
     } else if (!hooksOk) {
       checks.push({ name: "agent:codex", status: severityFor("codex"), detail: `not installed — ${hint("codex")}` });
     } else {

@@ -13,6 +13,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is Se
   in-place chain re-verification. Non-TTY stdout and `NO_COLOR` degrade to
   plain output automatically.
 
+## [0.3.3] - 2026-09-08
+
+Independent security test round (mimosa deep scan + manual dynamic testing on
+real ~/.codex) plus real-scenario round-2 (see docs/security-test-2026-09-07.md).
+
+### Fixed
+- **REINS_SHELL policy bypass closed (H1, PoC-confirmed)** — `reins exec` now
+  always executes under the platform default interpreter (/bin/bash posix,
+  literal `cmd.exe` win32 — ComSpec is no longer honored). The checked string
+  and the executed content can no longer diverge. `REINS_SHELL` env var and
+  the `shell` option are removed; regression tests cover fake-binary,
+  nonexistent-interpreter and ledger-digest recording.
+- **`reins replay` / `snapshot` / `trace show` / `trace export` accept session
+  names** (not just full paths) and report a friendly, non-stack error when
+  the session is not found (`resolveTraceArg`)
+- **`node dist/mcp/server.js` works directly** — self-entry detection added
+  (previously exited silently with no hint); `reins mcp` remains the primary
+  entry
+- **doctor flags unreadable codex hooks.json** — init would rebuild it from
+  scratch losing third-party hooks; the backup is now pointed at
+
+### Security
+- `REINS_SHELL`/`ComSpec` removal also closes the Windows-side interpreter
+  divergence (round-2 audit companion finding)
+- plaintext `ANTHROPIC_AUTH_TOKEN` and codex bearer token rotation advised
+  (host config hygiene, not a reins defect)
+
 ## [0.3.2] - 2026-09-07
 
 Round-5 independent review fixes. All carry regression tests (285 total).

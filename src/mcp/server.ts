@@ -65,6 +65,19 @@ export async function runMcpServer(): Promise<void> {
   await new Promise(() => {});
 }
 
+// direct-run entry (round-2 review finding): `node dist/mcp/server.js` also
+// works — running the bare module used to exit silently with no hint
+import { pathToFileURL } from "node:url";
+if (
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  runMcpServer().catch((err: unknown) => {
+    process.stderr.write(`[reins] MCP server error: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  });
+}
+
 function asText(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
 }

@@ -108,6 +108,24 @@ async function readJsonFile(filePath: string): Promise<unknown> {
   return JSON.parse(raw || "{}");
 }
 
+function resolveTraceArg(file: string | undefined, label: string): Promise<string> {
+  return (async () => {
+    const explicit = file ?? (await newestSessionFile());
+    if (!explicit) {
+      process.stderr.write(`[reins] no ${label} traces found — run a reins-protected agent first\n`);
+      process.exit(2);
+    }
+    if (existsSync(explicit)) return explicit;
+    const candidate = join(sessionsDir(), `${file}.jsonl`);
+    if (existsSync(candidate)) return candidate;
+    process.stderr.write(
+      `[reins] ${label} not found: ${file}\n` +
+      `       pass a full path, or a session name (try: reins trace list)\n`,
+    );
+    process.exit(2);
+  })();
+}
+
 const program = new Command();
 program
   .name("reins")
@@ -460,8 +478,7 @@ program
   .option("--policy <path>", "candidate policy (default: your installed policy)")
   .option("--strict", "exit 1 if any event would be blocked", false)
   .action(async (file: string | undefined, opts: { policy?: string; strict: boolean }) => {
-    const target = file ?? (await newestSessionFile());
-    if (!target) return failClosed("no session traces found");
+    const target = await resolveTraceArg(file, "session");
     const integrity = await verifyTrace(target);
     if (!integrity.ok) {
       return failClosed(`refusing to replay a tampered trace (${integrity.reason ?? "?"} at ${integrity.brokenAt})`);
@@ -481,8 +498,7 @@ program
   .option("--out <path>", "output markdown path")
   .option("--with-diffs", "include current `git diff HEAD` for touched files", false)
   .action(async (file: string | undefined, opts: { policy?: string; out?: string; withDiffs: boolean }) => {
-    const target = file ?? (await newestSessionFile());
-    if (!target) return failClosed("no session traces found");
+    const target = await resolveTraceArg(file, "session");
     const events = await readTrace(target);
     const integrity = await verifyTrace(target);
     const policyText = readFileSync(resolvePolicyPath(opts.policy), "utf8");
@@ -530,8 +546,7 @@ trace
   .description("render a session ledger as a human-readable timeline")
   .argument("[file]", "trace file (default: newest session)")
   .action(async (file?: string) => {
-    const target = file ?? (await newestSessionFile());
-    if (!target) return failClosed("no session traces found");
+    const target = await resolveTraceArg(file, "session");
     const events = await readTrace(target);
     const integrity = await verifyTrace(target);
     console.log(
@@ -704,8 +719,7 @@ trace
     if (opts.format !== "ndjson" && opts.format !== "json") {
       return failClosed(`unsupported --format "${opts.format}" (use ndjson or json)`);
     }
-    const target = file ?? (await newestSessionFile());
-    if (!target) return failClosed("no session traces found");
+    const target = await resolveTraceArg(file, "session");
     const integrity = await verifyTrace(target);
     const events = await readTrace(target);
     const { agent, sessionId } = deriveAgentAndSession(target);

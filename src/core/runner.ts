@@ -7,7 +7,6 @@ export interface RunGuardedOptions {
   command: string;
   trace: TraceWriter;
   cwd?: string;
-  shell?: string;
   /** precomputed policy decision; deny/ask block without executing. */
   decision?: DecisionResult;
   /** sha256 of the policy used for the decision — recorded on the ledger. */
@@ -22,6 +21,12 @@ export interface RunResult {
 /**
  * Execute a shell command through the rail: policy gate first, then process
  * supervision, then an auditable trace record with the outcome.
+ *
+ * The executing interpreter is ALWAYS the platform default (/bin/bash on
+ * posix, cmd.exe on win32) — the same interpreter family the policy was
+ * evaluated against. There is deliberately no env or caller override
+ * (H1, security audit 2026-09-07): letting the caller pick the interpreter
+ * would allow the checked string and the executed content to diverge.
  */
 export async function runGuarded(opts: RunGuardedOptions): Promise<RunResult> {
   const decision = opts.decision;
@@ -44,7 +49,6 @@ export async function runGuarded(opts: RunGuardedOptions): Promise<RunResult> {
   const { file, args } = resolveShellCommand(
     process.platform === "win32" ? "win32" : "posix",
     opts.command,
-    opts.shell ?? process.env.REINS_SHELL,
   );
   const input: Record<string, unknown> = { command: opts.command };
   if (opts.cwd !== undefined) input.cwd = opts.cwd;

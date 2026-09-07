@@ -218,7 +218,7 @@ Read this before trusting your machine to any tool, including this one:
 - **Command parsing is heuristic.** It handles combined short flags, wrapper binaries (`sudo`, `env`, `xargs`…), absolute program paths, subcommands, and embedded `-exec`-style execution. It does not attempt full shell semantics. The bypass test suite in `test/decider.test.ts` is the contract — PRs that add bypass cases are the most valuable contributions.
 - **The trace is tamper-*evident*, not tamper-*proof*.** An agent (or anything) with filesystem write access to `~/.reins/sessions` can delete the whole file — the hash chain proves *modification*, not *deletion*. Restrict permissions or ship traces off-box for high-stakes use.
 - **The policy itself is not signed yet.** An agent that can write to `~/.reins/policy.yaml` can weaken it before doing the thing you wanted to forbid. Policy integrity verification is the top roadmap item; until then, keep `~/.reins` writable only by you and let `reins doctor` be part of your routine.
-- **Windows is supported** (validated on real Windows hardware and a `windows-latest` CI job). The process layer hosts commands in `cmd.exe` by default — set `REINS_SHELL` to `pwsh.exe` if you prefer PowerShell. Hook payloads come from each agent's Windows build (Codex additionally supports per-OS `commandWindows` overrides).
+- **Windows is supported** (validated on real Windows hardware and a `windows-latest` CI job). The process layer hosts commands in `cmd.exe` by default Hook payloads come from each agent's Windows build (Codex additionally supports per-OS `commandWindows` overrides).
 
 ## How it compares
 
@@ -272,7 +272,7 @@ No. It records tool name, tool input, the decision, and the reason — no comman
 Tampering with the trace is detected (hash chain) and blocks further logging — that's the fail-closed guarantee. Weakening `policy.yaml` is *not* yet prevented; that's the top roadmap item. Until then, treat `~/.reins` permissions as part of your setup and run `reins doctor` occasionally.
 
 **Windows?**
-Yes — tested on real Windows hardware and a `windows-latest` CI job. `reins exec` hosts commands in `cmd.exe` by default; point `REINS_SHELL` at `pwsh.exe` for PowerShell semantics.
+Yes — tested on real Windows hardware and a `windows-latest` CI job. `reins exec` hosts commands in `cmd.exe` on Windows (interpreter is deliberately not env-selectable — see H1 note in the security audit).
 
 ## Contributing
 
