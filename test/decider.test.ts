@@ -238,6 +238,9 @@ describe("decide: shipped default policy", () => {
     expect(decide(defaultPolicy, write("/repo/prod/eu1.tfstate.backup")).decision).toBe("deny");
     expect(decide(defaultPolicy, write("/repo/.terraform/providers/x")).decision).toBe("deny");
     expect(decide(defaultPolicy, write("/repo/main.tf")).decision).toBe("allow");
+    expect(decide(defaultPolicy, write("/repo/certs/server.pem")).decision).toBe("deny");
+    expect(decide(defaultPolicy, write("/repo/certs/server.key")).decision).toBe("deny");
+    expect(decide(defaultPolicy, write("/repo/cert.pem.txt")).decision).toBe("allow");
   });
 
   it("protects secrets and ssh key material", () => {

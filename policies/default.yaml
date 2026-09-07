@@ -85,6 +85,18 @@ rules:
     path: "**/.aws/**"
     reason: "Cloud credentials"
 
+  - id: protect-private-keys
+    kind: path
+    action: deny
+    path: "**/*.pem"
+    reason: "PEM files often contain private keys or certificates"
+
+  - id: protect-key-files
+    kind: path
+    action: deny
+    path: "**/*.key"
+    reason: "Private key material"
+
   - id: protect-git-dir
     kind: path
     action: deny
