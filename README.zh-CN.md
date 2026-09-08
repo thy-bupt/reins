@@ -69,8 +69,8 @@ reins looks healthy.
 ## 实机效果
 
 来自真实 reins 安装的截图（macOS 终端，深色主题）。第一张是 hook 拦截递归删除；
-第二张是 `reins doctor` 检出某个项目——agent hook 存在但都不是 reins 的（它会明确告诉你
-`reins init <agent>` 将安装什么）。
+第二张是健康的 `reins doctor`——每个 agent 都已接上、策略加载、账本校验通过，
+全绿输出 `reins looks healthy.`。
 
 ![reins hook 拦截 `rm -rf`](docs/demo-hook-block.png)
 

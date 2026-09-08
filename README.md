@@ -93,9 +93,9 @@ reins looks healthy.
 ## See it in action
 
 Real captures from a live reins install (macOS Terminal, dark theme). The first
-one is the hook firing on a recursive delete; the second is `reins doctor`
-flagging a project whose agent hooks are present but not reins (it tells you
-exactly what `reins init <agent>` would install).
+one is the hook firing on a recursive delete; the second is a healthy
+`reins doctor` — every agent wired up, policy loaded, traces verified, and the
+all-green `reins looks healthy.` verdict.
 
 ![reins hook blocking `rm -rf`](docs/demo-hook-block.png)
 
