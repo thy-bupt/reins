@@ -69,8 +69,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # scoped packages pack into a @scope/ subdirectory
       - run: npm pack --pack-destination /tmp
-      - run: npm install -g /tmp/reins-*.tgz
+      - run: npm install -g '/tmp/@tanghuiyi/reins-'*.tgz
       - run: reins --version
       - run: reins policy eval "npm test"
       - name: full lifecycle smoke (isolated HOME)
