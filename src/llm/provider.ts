@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { resolveShellCommand } from "../core/matchers.js";
 import type { LlmConfig } from "./config.js";
 
 export class LlmNotConfiguredError extends Error {}
@@ -79,12 +78,22 @@ async function completeViaCommand(prompt: string, cfg: LlmConfig): Promise<strin
     // same deliberate platform shell as the exec engine (H1: checked string
     // and executed content must never diverge) — /bin/sh does not exist on
     // win32, where the default interpreter is cmd.exe
-    const { file, args } = resolveShellCommand(
-      process.platform === "win32" ? "win32" : "posix",
-      cfg.command!,
-    );
+    const win32 = process.platform === "win32";
+    let file: string;
+    let args: string[];
+    if (win32) {
+      // cmd /d /s /c strips one outer pair of double quotes — wrap the whole
+      // command so quotes inside it survive the Windows argument round-trip
+      // (without the wrap, spawn re-quoting + cmd /s mangle embedded quotes)
+      file = "cmd.exe";
+      args = ["/d", "/s", "/c", `"${cfg.command!}"`];
+    } else {
+      file = "/bin/bash";
+      args = ["-c", cfg.command!];
+    }
     const child = spawn(file, args, {
       stdio: ["pipe", "pipe", "pipe"],
+      windowsVerbatimArguments: win32,
     });
     let out = "";
     let err = "";

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { realpathSync } from "node:fs";
-import { basename, dirname, isAbsolute, relative } from "node:path";
+import { realpathSync, statSync } from "node:fs";
+import { basename, dirname, isAbsolute } from "node:path";
 import type { VerifyResult, TraceEvent } from "../core/trace.js";
 
 export interface GitContext {
@@ -87,21 +87,35 @@ export async function collectGitContext(paths: string[], withDiffs: boolean): Pr
       } catch {
         /* file may be gone; fall back to the recorded path */
       }
-      // realpath does not always expand 8.3 short names (RUNNER~1) on win32,
-      // so a file path and the git-returned repoRoot may spell the same
-      // directory differently — walk up, canonicalizing each ancestor, until
-      // the path sits under the repo root.
-      const root = repoRoot.replace(/\\/g, "/").toLowerCase();
+      // git's repoRoot and a realpath'd file path can spell the same
+      // directory differently on win32 (8.3 short names: RUNNER~1 vs
+      // runneradmin), so string prefix checks are unreliable — match
+      // directory identity via stat instead, and rebuild the repo-relative
+      // path from basenames while walking up.
       let rel: string | null = null;
-      for (let cur = realPath; ; ) {
-        const norm = cur.replace(/\\/g, "/").toLowerCase();
-        if (norm.startsWith(root + "/")) {
-          rel = relative(repoRoot, cur).replace(/\\/g, "/");
-          break;
+      {
+        let rootStat: ReturnType<typeof statSync> | null = null;
+        try {
+          rootStat = statSync(repoRoot);
+        } catch {
+          /* repoRoot missing: fall through to no-diff */
         }
-        const parent = dirname(cur);
-        if (parent === cur) break;
-        cur = parent;
+        const parts: string[] = [];
+        for (let cur = realPath; rootStat !== null; ) {
+          let same = false;
+          try {
+            const s = statSync(cur);
+            same = s.dev === rootStat.dev && s.ino === rootStat.ino;
+          } catch {
+            /* file may be gone */
+          }
+          if (same) break;
+          const parent = dirname(cur);
+          if (parent === cur) break;
+          parts.unshift(basename(cur));
+          cur = parent;
+        }
+        if (rootStat !== null) rel = parts.join("/");
       }
       if (rel === null || rel === "" || diffs[rel] !== undefined) continue;
       const diff = gitRun(["diff", "HEAD", "--", rel], repoRoot);
