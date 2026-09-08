@@ -1,9 +1,18 @@
 {
   "name": "reins",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Fail-closed safety rail for AI coding agents: declarative policy engine, tamper-evident trace, session replay. Agent-agnostic, local-first.",
   "type": "module",
   "license": "Apache-2.0",
+  "author": "THY17308111153",
+  "homepage": "https://thy-bupt.github.io/reins/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thy-bupt/reins.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thy-bupt/reins/issues"
+  },
   "engines": {
     "node": ">=20"
   },

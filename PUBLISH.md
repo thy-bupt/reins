@@ -1,9 +1,10 @@
 # Publishing reins — step-by-step
 
-Everything in this repo is release-ready (v0.1.0 tagged). This checklist takes
-you from clone to public launch. Steps marked 🔒 need your accounts.
+Current release: **v0.10.1** (tag + npm artifact refer to the same commit).
+This checklist took the project from clone to public launch; steps already
+done are marked ✅. Steps marked 🔒 need your accounts.
 
-## 1. Create the GitHub repository
+## 1. Create the GitHub repository ✅ (live at github.com/thy-bupt/reins)
 
 ```bash
 cd reins
@@ -25,17 +26,17 @@ The workflow (`.github/workflows/ci.yml`) runs lint + build + tests on Node
 
 ```bash
 npm login                           # 🔒
-npm publish                         # package name "reins" was verified available
-git tag v0.1.0 && git push --tags   # tag exists locally if you cloned this repo
+npm publish --access public         # package name "reins" was verified available
+git tag vX.Y.Z && git push origin vX.Y.Z   # tag the exact release commit first
 ```
 
 ## 4. Drop the placeholders
 
-- `CHANGELOG.md` link at the bottom: `YOUR_USERNAME` → your GitHub username
+- `CHANGELOG.md` link at the bottom: `thy-bupt` → your GitHub username
 - Optional badges for the top of `README.md` (paste after publishing):
 
 ```markdown
-[![CI](https://github.com/YOUR_USERNAME/reins/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/reins/actions/workflows/ci.yml)
+[![CI](https://github.com/thy-bupt/reins/actions/workflows/ci.yml/badge.svg)](https://github.com/thy-bupt/reins/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/reins)](https://www.npmjs.com/package/reins)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ```
@@ -79,4 +80,4 @@ it composes with native sandboxing.
 
 - Watch the bypass test suite: every "here's a command that slipped past"
   issue becomes a test case (see CONTRIBUTING.md).
-- Cut 0.2.0 when the first adapter lands.
+- Cut the next minor when the first new adapter lands.

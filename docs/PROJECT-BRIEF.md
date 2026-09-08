@@ -57,15 +57,17 @@ src/cli/       人类管理面（main / doctor / replay / snapshot / show）
 
 ## 4. 质量状态
 
-- **255 个测试全绿（v0.3.0）**（macOS 本机），含：绕过攻击测试集（`rm -fr`/`sudo`/`find -exec`/
-  多行/管道等变体）、误报防御（`echo "rm -rf"` 必须放行）、六 agent 矩阵 e2e（真实
-  dist 二进制走 stdin）、MCP 协议级 e2e（SDK 客户端全握手）
+- **308 个测试全绿（v0.10.1）**（macOS 本机 + 三平台 CI），含：绕过攻击测试集
+  （`rm -fr`/`sudo`/`find -exec`/`${IFS}`/`$IFS`/`eval`/ANSI-C 引号/多行/管道等变体）、
+  误报防御（`echo "rm -rf"` 必须放行）、六 agent 矩阵 e2e（真实 dist 二进制走 stdin）、
+  MCP 协议级 e2e（SDK 客户端全握手）
 - CI：ubuntu (node 20/22/24) + windows-latest + macos-latest
 - 平台实测：macOS ✅ 全量 · Windows ✅ 真机 154/154（v0.2 新增项待复验）· Linux 覆盖于 CI
 - 真实 agent 实测：Claude Code 2.1.263 headless，真实 `rm -rf` 被拦、MCP 工具被 agent
   亲自调用、agent 幻觉被账本揭穿（`docs/evidence-agent.md`）
-- 独立安全评审（Codex）两轮意见已处理：第一轮 4 个发布阻断项（shell 绕过/并发/
-  穿越/打包）+ 第二轮 2 个新 P0（追加时二次验证、symlink 防护）均已修复并有回归测试；
+- 独立安全评审（Codex）多轮意见已处理：round 1–5（shell 绕过/并发/穿越/打包/
+  追加时二次验证/symlink 防护）+ round-6 终审（`$IFS`、ANSI-C 引号、`eval` 绕过、
+  单引号 secret 脱敏、installer 所有权、账本读路径 symlink）均已修复并有回归测试；
   LLM 集成为默认关闭的可选功能（`docs/LLM.md`，方案 `docs/llm-plan.md`）：
   - 独立安全评审（Codex）发现的 4 个发布阻断项已修复并有回归测试：
   shell 间接执行绕过（`bash -c`/控制流/`${IFS}`/`$(...)`/wrapper 旗标）、

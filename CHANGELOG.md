@@ -3,6 +3,44 @@
 All notable changes to reins are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is SemVer.
 
+## [0.10.1] - 2026-09-08
+
+Round-6 independent security review (Codex, 2026-09-08) plus a release-audit
+pass: every release-blocking finding is fixed below. The npm artifact, git tag
+(`v0.10.1`) and this changelog refer to the same commit.
+
+### Fixed
+- **Policy bypasses closed (round-6 Codex review)** — `$IFS` (unbraced)
+  whitespace expansion, ANSI-C-quoted interpreter scripts
+  (`bash -c $'…'`, `$"…"`), and `eval "…"` (including inside command
+  substitution) are now derived and policy-matched; interpreter `-c` scripts
+  split across tokens are rejoined. 5 new bypass-corpus regression tests
+  reproduce the exact adversarial probes from the review.
+- **Single-quoted secrets redacted** — `password='…'` / `token='…'` /
+  `api_key='…'` forms were not caught by the shared redaction regex and could
+  reach an outbound LLM provider or an evidence export; single- and
+  double-quoted values are now both redacted (regression test included).
+- **Installer ownership (round-6 Codex review)** — `reins init grok/codex` no
+  longer replaces a malformed or foreign hooks file (parse failure now fails
+  closed, matching claude/gemini behavior); `reins init skills` refuses to
+  overwrite a user-modified skill file, consistent with uninstall's marker
+  protection.
+- **Trace read boundary** — `readTrace`/`verifyTrace` now refuse symlinked
+  ledger files (append already did via `O_NOFOLLOW`); a planted symlink to a
+  file outside `sessions/` can no longer be verified as trusted. `trace
+  verify` reports this as a tampered verdict instead of crashing.
+- **TUI robustness** — a corrupt or unreadable session file no longer crashes
+  `reins ui` (it is skipped; the rest of the ledger stays browsable); bare
+  `reins` opens the browser in a TTY even with `NO_COLOR` set (`NO_COLOR`
+  only disables color, round-6 finding); remaining hardcoded English labels
+  are bilingual now (event detail title, decision labels).
+
+### Changed
+- Release gate (0.10.0) satisfied: the pending independent reviews completed
+  on 2026-09-08 — a deep round-6 security review (findings fixed above) and a
+  release audit (packaging, fail-closed smoke, dependency audit: 0 npm-audit
+  findings in production deps).
+
 ## [0.10.0] - 2026-09-08
 
 Release renumbering: the package version is resynced to **0.10.0**, superseding
@@ -20,8 +58,8 @@ and the git tag (`v0.10.0`) all agree. Everything recorded in the 0.4.0,
   performance, FAQ, roadmap).
 
 ### Changed
-- Release gate: independent review of the TUI remains pending before an npm
-  publish; the GitHub release is the current public artifact.
+- Release gate: superseded — the independent reviews completed on 2026-09-08
+  and their findings shipped in 0.10.1 (see above).
 ## [0.4.0] - 2026-09-07
 
 ### Added

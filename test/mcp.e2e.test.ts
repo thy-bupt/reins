@@ -48,7 +48,7 @@ describe.skipIf(!cli)("reins mcp server (protocol e2e)", () => {
   it("reports the current server version via MCP (round-4: no hardcoded 0.2.0)", async () => {
     const c = await getClient();
     const info = await c.getServerVersion();
-    expect(info.version).toBe("0.10.0");
+    expect(info.version).toBe("0.10.1");
   });
 
   it("check_command previews a denial over the wire", async () => {
