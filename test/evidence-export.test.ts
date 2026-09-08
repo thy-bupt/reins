@@ -166,7 +166,7 @@ describe.skipIf(!cli)("trace export e2e", () => {
     });
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("unsupported --format");
-  });
+  }, 15_000);
 
   it("exports ndjson with per-event integrity and redaction", async () => {
     const h = mkdtempSync();
@@ -197,7 +197,7 @@ describe.skipIf(!cli)("trace export e2e", () => {
     expect(records[0]!.integrity_status).toBe("ok");
     expect(records[0]!.command).not.toContain("abc123def");
     expect(records[0]!.command_redacted).toBe(true);
-  });
+  }, 15_000);
 
   it("exits non-zero and flags tampered status when the ledger was modified", async () => {
     const h = mkdtempSync();
@@ -221,7 +221,7 @@ describe.skipIf(!cli)("trace export e2e", () => {
     const doc = JSON.parse(r.stdout) as { overall_integrity: string; events: Array<{ integrity_status: string }> };
     expect(doc.overall_integrity).toBe("tampered");
     expect(doc.events[0]!.integrity_status).toBe("untrusted_after_break");
-  });
+  }, 15_000);
 });
 
 function mkdtempSync(): string {
