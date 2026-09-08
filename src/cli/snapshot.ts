@@ -87,11 +87,23 @@ export async function collectGitContext(paths: string[], withDiffs: boolean): Pr
       } catch {
         /* file may be gone; fall back to the recorded path */
       }
-      const norm = realPath.replace(/\\/g, "/");
-      const root = repoRoot.replace(/\\/g, "/");
-      if (!norm.toLowerCase().startsWith(root.toLowerCase() + "/")) continue;
-      const rel = relative(repoRoot, realPath).replace(/\\/g, "/");
-      if (rel === "" || diffs[rel] !== undefined) continue;
+      // realpath does not always expand 8.3 short names (RUNNER~1) on win32,
+      // so a file path and the git-returned repoRoot may spell the same
+      // directory differently — walk up, canonicalizing each ancestor, until
+      // the path sits under the repo root.
+      const root = repoRoot.replace(/\\/g, "/").toLowerCase();
+      let rel: string | null = null;
+      for (let cur = realPath; ; ) {
+        const norm = cur.replace(/\\/g, "/").toLowerCase();
+        if (norm.startsWith(root + "/")) {
+          rel = relative(repoRoot, cur).replace(/\\/g, "/");
+          break;
+        }
+        const parent = dirname(cur);
+        if (parent === cur) break;
+        cur = parent;
+      }
+      if (rel === null || rel === "" || diffs[rel] !== undefined) continue;
       const diff = gitRun(["diff", "HEAD", "--", rel], repoRoot);
       if (diff) diffs[rel] = diff;
     }

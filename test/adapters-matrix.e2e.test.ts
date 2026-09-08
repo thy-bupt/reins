@@ -132,6 +132,8 @@ describe.skipIf(!cli)("agent matrix e2e: init + hook + trace for every adapter",
       }
 
       for (const fixture of FIXTURES[agent]!) {
+        // windows CI spawns the hook CLI slowly (defender + cold node) — 5s
+        // default is too tight there; 15s is still far under a real hang
         it(`hook: ${fixture.label} → ${fixture.shouldBlock ? "blocked (exit 2)" : "allowed (exit 0)"}`, () => {
           boot();
           const r = runCli(["hook", agent], { REINS_HOME: home }, fixture.payload);
@@ -149,7 +151,7 @@ describe.skipIf(!cli)("agent matrix e2e: init + hook + trace for every adapter",
           const verify = runCli(["trace", "verify", tracePath], { REINS_HOME: home });
           expect(verify.status).toBe(0);
           expect(verify.stdout).toContain("hash chain intact");
-        });
+        }, 15_000);
       }
     });
   }

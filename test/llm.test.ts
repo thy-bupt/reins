@@ -224,13 +224,13 @@ describe.skipIf(!cli)("suggest --apply e2e (round-4 P0-1 regression)", () => {
   const PROPOSALS = JSON.stringify({
     proposals: [{ kind: "command", action: "deny", program: "mkfs", reason: "formats filesystems" }],
   });
-  // fake provider script: discard the prompt on stdin, emit fixed proposals JSON
+  // fake provider script: ignore stdin, emit fixed proposals JSON. A node
+  // script (not `cat`) so it works under cmd.exe on win32 too.
   function setup(h: string, initialPolicy: string) {
     writeFileSync(join(h, "policy.yaml"), initialPolicy);
-    writeFileSync(join(h, "config.yaml"), "llm:\n  provider: command\n  command: cat " + join(h, "fake-llm.json") + "\n");
-    // `cat <file>` ignores stdin and always prints the same proposals — a
-    // deterministic fake LLM
-    writeFileSync(join(h, "fake-llm.json"), PROPOSALS);
+    const script = join(h, "fake-llm.js");
+    writeFileSync(script, `console.log(${JSON.stringify(PROPOSALS)});\n`);
+    writeFileSync(join(h, "config.yaml"), `llm:\n  provider: command\n  command: node "${script}"\n`);
   }
 
   it("apply on rules: [] produces a valid policy that the hook then loads", async () => {
@@ -250,7 +250,7 @@ describe.skipIf(!cli)("suggest --apply e2e (round-4 P0-1 regression)", () => {
     expect(hook.status).toBe(2);
     expect(hook.stderr).toContain("llm-");
     expect(hook.stderr).toContain("formats filesystems");
-  });
+  }, 15_000);
 
   it("apply on a policy with existing rules keeps both old and new", async () => {
     const h = mkdtempSyncDir();
@@ -268,15 +268,16 @@ describe.skipIf(!cli)("suggest --apply e2e (round-4 P0-1 regression)", () => {
     const ids = policy.rules.map((r) => r.id);
     expect(ids).toContain("rm-recursive");
     expect(ids.some((id) => id.startsWith("llm-"))).toBe(true);
-  });
+  }, 15_000);
 
   it("an all-rejected round leaves policy.yaml byte-identical", async () => {
     const h = mkdtempSyncDir();
     const original = "version: 1\ndefault: allow\nrules: []\n";
     writeFileSync(join(h, "policy.yaml"), original);
     // over-broad path proposal → rejected by validation
-    writeFileSync(join(h, "config.yaml"), "llm:\n  provider: command\n  command: cat " + join(h, "fake.json") + "\n");
-    writeFileSync(join(h, "fake.json"), JSON.stringify({ proposals: [{ kind: "path", action: "deny", path: "**", reason: "block all" }] }));
+    const script = join(h, "fake.js");
+    writeFileSync(script, `console.log(${JSON.stringify(JSON.stringify({ proposals: [{ kind: "path", action: "deny", path: "**", reason: "block all" }] }))});\n`);
+    writeFileSync(join(h, "config.yaml"), `llm:\n  provider: command\n  command: node "${script}"\n`);
 
     const apply = spawnSync(process.execPath, [DIST, "suggest", "--apply"], {
       env: { ...process.env, REINS_HOME: h },
@@ -284,5 +285,5 @@ describe.skipIf(!cli)("suggest --apply e2e (round-4 P0-1 regression)", () => {
     });
     expect(apply.status).toBe(1);
     expect(readFileSync(join(h, "policy.yaml"), "utf8")).toBe(original);
-  });
+  }, 15_000);
 });

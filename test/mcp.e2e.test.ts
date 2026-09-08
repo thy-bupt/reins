@@ -96,15 +96,19 @@ describe.skipIf(!cli)("MCP LLM prompt redaction (round-5 finding: provider must 
     // fake provider: captures the prompt (stdin) to a file, then proposes "npm ci"
     const capture = join(llmHome, "captured-prompt.txt");
     // a small fake-provider script: tees stdin (the prompt) to the capture
-    // file, then emits a fixed alternatives JSON
-    const fakeScript = join(llmHome, "fake-llm.sh");
+    // file, then emits a fixed alternatives JSON. A node script (not sh) so
+    // it runs under cmd.exe on win32 too.
+    const fakeScript = join(llmHome, "fake-llm.js");
     writeFileSync(
       fakeScript,
-      `#!/bin/sh\ncat > '${capture}'\nprintf '%s' '{"alternatives":["npm ci"]}'\n`,
+      `const fs = require("fs");
+process.stdin.pipe(fs.createWriteStream(${JSON.stringify(capture)}));
+process.stdin.on("end", () => console.log('{"alternatives":["npm ci"]}'));
+`,
     );
     writeFileSync(
       join(llmHome, "config.yaml"),
-      `llm:\n  provider: command\n  command: sh '${fakeScript}'\n`,
+      `llm:\n  provider: command\n  command: node "${fakeScript}"\n`,
     );
 
     const transport = new StdioClientTransport({
@@ -135,15 +139,17 @@ describe.skipIf(!cli)("MCP LLM fallback wiring (round-4 finding: server must rea
     const llmHome = join(tmpdir(), `reins-mcp-llm-${Math.random().toString(36).slice(2)}`);
     mkdirSync(llmHome, { recursive: true });
     writeFileSync(join(llmHome, "policy.yaml"), "version: 1\ndefault: allow\nrules: []\n");
-    // fake LLM provider: a command that always proposes "npm ci" (an allowed command)
+    // fake LLM provider: a command that always proposes "npm ci" (an allowed
+    // command). A node script (not printf) so it runs under cmd.exe on win32.
+    const fakeScript = join(llmHome, "fake-llm.js");
+    writeFileSync(
+      fakeScript,
+      `console.log('{"alternatives":["npm ci"]}');
+`,
+    );
     writeFileSync(
       join(llmHome, "config.yaml"),
-      [
-        "llm:",
-        "  provider: command",
-        "  command: printf '%s' '{\"alternatives\":[\"npm ci\"]}'",
-        "",
-      ].join("\n"),
+      `llm:\n  provider: command\n  command: node "${fakeScript}"\n`,
     );
 
     const transport = new StdioClientTransport({
