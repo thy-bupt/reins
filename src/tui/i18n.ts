@@ -42,6 +42,10 @@ export interface UiStrings {
   fileLabel: string;
   eventHashLabel: string;
   driftYesLabel: string;
+  eventDetailTitle: (seq: number) => string;
+  decisionDeny: string;
+  decisionAllow: string;
+  decisionAsk: string;
   // verify
   verifyOk: (n: number) => string;
   verifyFail: (reason: string, at: number | undefined) => string;
@@ -100,6 +104,10 @@ const EN: UiStrings = {
   fileLabel: "file",
   eventHashLabel: "event hash",
   driftYesLabel: "yes — policy changed mid-session",
+  eventDetailTitle: (seq) => `event #${seq}`,
+  decisionDeny: "DENY",
+  decisionAllow: "ALLOW",
+  decisionAsk: "ASK",
   verifyOk: (n) => `✔ ${n} events, chain intact`,
   verifyFail: (reason, at) => `✗ TAMPERED: ${reason} at event ${at ?? "?"}`,
   wizardWelcome: "reins setup wizard",
@@ -156,6 +164,10 @@ const ZH: UiStrings = {
   fileLabel: "文件",
   eventHashLabel: "事件哈希",
   driftYesLabel: "是 — 会话中途策略变化",
+  eventDetailTitle: (seq) => `事件 #${seq}`,
+  decisionDeny: "拒绝",
+  decisionAllow: "放行",
+  decisionAsk: "询问",
   verifyOk: (n) => `✔ ${n} 个事件，哈希链完整`,
   verifyFail: (reason, at) => `✗ 已篡改：${reason}（事件 ${at ?? "?"}）`,
   wizardWelcome: "reins 设置向导",

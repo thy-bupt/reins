@@ -43,6 +43,12 @@ const MUST_DENY: string[] = [
   "bash -c 'echo $(rm -rf /tmp/x)'",
   // obfuscation
   "rm -r${IFS}-f /tmp/x",
+  // round-6 (Codex independent review) additions
+  "rm$IFS-rf /tmp/x",
+  "rm$IFS -rf /tmp/x",
+  "bash -c $'rm -rf /tmp/x'",
+  `eval "rm -rf /tmp/x"`,
+  `echo $(eval "rm -rf /tmp/x")`,
   // nested interpreter behind find
   `find . -exec sh -c "rm -rf /tmp/x" \\;`,
   // wrapper flag/value handling

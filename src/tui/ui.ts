@@ -28,8 +28,19 @@ async function listSessions(sessionsDir: string): Promise<SessionFile[]> {
   const out: SessionFile[] = [];
   for (const name of readdirSync(sessionsDir).filter((f) => f.endsWith(".jsonl"))) {
     const path = join(sessionsDir, name);
-    const events = await readTrace(path);
-    const integrity = await verifyTrace(path);
+    // a corrupt / symlinked / unreadable session must not crash the browser —
+    // skip it so the rest of the ledger stays browsable (round-6 Codex finding)
+    let events: TraceEvent[];
+    let integrity: { ok: boolean; events: number; brokenAt?: number; reason?: string };
+    try {
+      events = await readTrace(path);
+      integrity = await verifyTrace(path);
+    } catch {
+      continue;
+    }
+    if (!integrity.ok) {
+      events = [];
+    }
     const drifts = new Set(
       events.map((e: TraceEvent) => e.policyDigest).filter((d: unknown): d is string => typeof d === "string"),
     );
@@ -115,13 +126,13 @@ async function browseSession(chosen: SessionFile, s: UiStrings): Promise<void> {
         message: s.actionEvents,
         options: chosen.events.map((e) => ({
           value: String(e.seq),
-          label: `#${e.seq} ${e.decision.toUpperCase()} ${e.tool}`,
+          label: `#${e.seq} ${c.decision(e.decision).label} ${e.tool}`,
           hint: summarizeEvent(e).slice(0, 60),
         })),
       });
       if (clack.isCancel(pick)) continue;
       const chosenEvent = chosen.events[Number(pick)]!;
-      clack.note(renderEventDetail(chosenEvent, s), `event #${chosenEvent.seq}`);
+      clack.note(renderEventDetail(chosenEvent, s), s.eventDetailTitle(chosenEvent.seq));
     }
     if (act === "verify") {
       const integrity = await verifyTrace(chosen.path);

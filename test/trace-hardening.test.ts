@@ -84,4 +84,22 @@ describe("P0-2: symlinked session files are rejected", () => {
     expect(readFileSync(outside, "utf8")).toBe("hello\n");
     void existsSync;
   });
+
+  it("verifyTrace refuses a symlinked ledger (round-6 Codex finding)", async () => {
+    // read/verify used to follow a symlink to an external JSONL and report ok;
+    // a ledger outside the sessions boundary must not be trusted on read
+    const dir = await tmpDir();
+    const fs = await import("node:fs");
+    fs.mkdirSync(join(dir, "sessions"), { recursive: true });
+    const outside = join(dir, "external.jsonl");
+    writeFileSync(outside, `{"seq":0,"hash":"x"}\n`);
+    const link = join(dir, "sessions", "planted.jsonl");
+    fs.symlinkSync(outside, link, "file");
+
+    const result = await verifyTrace(link);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/symlink/i);
+    // the external file is untouched and still not trusted
+    expect(readFileSync(outside, "utf8")).toContain('"hash":"x"');
+  });
 });

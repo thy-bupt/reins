@@ -19,9 +19,9 @@ function toolsAllow(rule: Rule, tool: string): boolean {
 }
 
 function decideCommand(policy: Policy, tool: string, raw: string): DecisionResult {
-  // ${IFS} is the classic obfuscation for whitespace; normalize it so
-  // `rm -r${IFS}-f` parses like `rm -r -f`
-  const normalized = raw.replace(/\$\{IFS\}/g, " ");
+  // ${IFS} and $IFS are the classic obfuscations for whitespace; normalize
+  // both so `rm -r${IFS}-f` / `rm$IFS-rf` parse like `rm -r -f`
+  const normalized = raw.replace(/\$\{IFS\}/g, " ").replace(/\$IFS(?![A-Za-z0-9_{])/g, " ");
   // evaluate the literal command AND everything that runs indirectly:
   // $(…), backticks, and bash/sh/zsh -c "…" script bodies
   const segments = [...parseSegments(normalized)];

@@ -135,8 +135,9 @@ program
   .version(VERSION);
 
 // bare `reins` in a real terminal opens the interactive browser (with
-// first-run language selection)
-if (process.argv.length <= 2 && process.stdout.isTTY && !process.env["NO_COLOR"]) {
+// first-run language selection). NO_COLOR only disables color — it must not
+// disable the browser itself (round-6 review finding).
+if (process.argv.length <= 2 && process.stdout.isTTY) {
   let lang = readLang();
   if (!lang) {
     const clack = await import("@clack/prompts");
@@ -202,6 +203,11 @@ program
       const targetBase = opts.settings ?? join(homedir(), ".claude", "skills");
       for (const name of SKILL_NAMES) {
         const r = await installSkill(name, targetBase);
+        if (r.refused) {
+          return failClosed(
+            `${r.path} already exists and was not installed by reins — not overwriting it. Remove it yourself or pass --settings to pick another directory.`,
+          );
+        }
         console.log(r.changed ? `skill installed: ${r.path}` : `skill already present: ${r.path}`);
       }
       console.log("\nrules of engagement: skills are advisory — enforcement still lives in the hooks");
@@ -282,7 +288,14 @@ program
       case "grok": {
         const hooksPath = opts.settings ?? join(homedir(), ".grok", "hooks", "reins.json");
         const existing = existsSync(hooksPath) ? await readFile(hooksPath, "utf8") : null;
-        const content = grokHooksFileContent(existing);
+        let content: string;
+        try {
+          content = grokHooksFileContent(existing);
+        } catch {
+          return failClosed(
+            `${hooksPath} exists but is not valid JSON — not touching it. Fix it by hand or pass --settings to pick another path.`,
+          );
+        }
         if (existing !== null && content === existing) {
           console.log(`hook already installed in ${hooksPath}`);
           break;
@@ -299,7 +312,14 @@ program
         const hooksPath = opts.settings ?? join(homedir(), ".codex", "hooks.json");
         const configPath = join(dirname(hooksPath), "config.toml");
         const existingHooks = existsSync(hooksPath) ? await readFile(hooksPath, "utf8") : null;
-        const hooksContent = codexHooksFileContent(existingHooks);
+        let hooksContent: string;
+        try {
+          hooksContent = codexHooksFileContent(existingHooks);
+        } catch {
+          return failClosed(
+            `${hooksPath} exists but is not valid JSON — not touching it. Fix it by hand or pass --settings to pick another path.`,
+          );
+        }
         if (existingHooks === null || hooksContent !== existingHooks) {
           await backupOnce(hooksPath);
           await atomicWrite(hooksPath, hooksContent);
@@ -449,9 +469,9 @@ trace
   .action(async (file?: string) => {
     const target = file ?? (await newestSessionFile());
     if (!target) return failClosed("no session traces found");
-    const events = await readTrace(target);
     const result = await verifyTrace(target);
     if (result.ok) {
+      const events = await readTrace(target);
       console.log(`ok: ${events.length} events, hash chain intact — ${target}`);
     } else {
       console.error(

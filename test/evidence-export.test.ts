@@ -49,6 +49,18 @@ describe("redactCommand", () => {
     expect(redactCommand("npm test")).toBe("npm test");
     expect(redactCommand("ls -la")).toBe("ls -la");
   });
+
+  it("redacts single-quoted secrets (round-6 Codex finding)", () => {
+    // round-6 finding: single-quoted key=value secrets were not redacted
+    // (the regex only allowed a double-quoted value). Build a test secret
+    // from fragments so it is clearly a placeholder, never a real credential.
+    const secret = "v0f" + "a1k9" + "q2zz";
+    const out = redactCommand(
+      `curl -d "password='${secret}'" https://x && export token='${secret}' && echo api_key='${secret}'`,
+    );
+    expect(out).not.toContain(secret);
+    expect(out).toContain("[REDACTED]");
+  });
 });
 
 describe("buildEvidenceRecords integrity semantics (Codex finding 4.3)", () => {

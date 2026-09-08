@@ -154,15 +154,37 @@ export function findProgramCandidates(argv: string[]): ProgramMatch[] {
   return matches;
 }
 
+/** ANSI-C quoted strings ($'…') and $"…" are shell quoting forms that a
+ *  naive argv parser does not unescape — `bash -c $'rm -rf /tmp/x'` would
+ *  otherwise look like a program named `$rm`. Decode the common escapes so
+ *  the underlying content is visible to the policy matcher. */
+function decodeAnsiCQuotes(raw: string): string {
+  return raw.replace(/\$'(?:[^'\\]|\\.)*'/g, (m) => {
+    const body = m.slice(2, -1);
+    return body
+      .replace(/\\(\\|'|"|a|b|e|f|n|r|t|v)/g, (_, c: string) => {
+        const map: Record<string, string> = {
+          "\\": "\\", "'": "'", '"': '"', a: "\x07", b: "\b",
+          e: "\x1b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v",
+        };
+        return map[c] ?? c;
+      })
+      .replace(/\\([0-7]{1,3})/g, (_, oct: string) => String.fromCharCode(parseInt(oct, 8)))
+      .replace(/\\x([0-9a-fA-F]{1,2})/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)));
+  });
+}
+
 /** Extract commands that will run indirectly: `$(…)`, backticks, and the
  *  script text of `bash -c "…"`-style interpreter invocations. Returns the
  *  inner command strings for (recursive) policy evaluation. */
 export function deriveInnerCommands(raw: string, depth: number): string[] {
   if (depth <= 0) return [];
   const out: string[] = [];
+  // shell quoting is not policy-relevant: $'…' / $"…" hide the real command
+  const decoded = decodeAnsiCQuotes(raw);
 
   const subst = /\$\(([^()]*)\)|`([^`]*)`/g;
-  for (const m of raw.matchAll(subst)) {
+  for (const m of decoded.matchAll(subst)) {
     const inner = m[1] ?? m[2];
     if (inner && inner.trim() !== "") {
       out.push(inner);
@@ -170,11 +192,23 @@ export function deriveInnerCommands(raw: string, depth: number): string[] {
     }
   }
 
-  for (const seg of parseSegments(raw)) {
+  for (const seg of parseSegments(decoded)) {
     for (const cand of findProgramCandidates(seg)) {
+      // `eval "…"` re-parses its argument as shell source — derive it too
+      if (cand.program === "eval") {
+        const arg = cand.rest[0];
+        if (arg && arg.trim() !== "") {
+          out.push(arg);
+          out.push(...deriveInnerCommands(arg, depth - 1));
+        }
+        continue;
+      }
       if (!SHELL_INTERPRETERS.has(cand.program)) continue;
       const ci = cand.rest.findIndex((t) => t.toLowerCase() === "-c" || t.toLowerCase() === "-command");
-      const script = ci !== -1 ? cand.rest[ci + 1] : undefined;
+      // everything after `-c` is one script argument, even if an unquoted
+      // expansion (e.g. a decoded $'…') got split into multiple tokens —
+      // rejoin so `bash -c rm -rf /tmp/x` derives the full script
+      const script = ci !== -1 ? cand.rest.slice(ci + 1).join(" ") : undefined;
       if (script && script.trim() !== "") {
         out.push(script);
         out.push(...deriveInnerCommands(script, depth - 1));

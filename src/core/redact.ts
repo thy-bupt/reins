@@ -10,7 +10,8 @@ const SECRET_PATTERNS: Array<[RegExp, string]> = [
   [/\b(?:sk|pk)-[A-Za-z0-9]{8,}/g, "[REDACTED-KEY]"],
   [/\bAKIA[0-9A-Z]{16}\b/g, "[REDACTED-AWS-KEY]"],
   [
-    /\b(?:api[_-]?key|token|password|passwd|secret|authorization)\s*[=:]\s*"?[^\s"'&]{4,}/gi,
+    // key=value secrets with optional single OR double quotes around the value
+    /\b(?:api[_-]?key|token|password|passwd|secret|authorization)\s*[=:]\s*["']?[^\s"'&]{4,}/gi,
     "$1=[REDACTED]",
   ],
   [/\b(?:ghp|github_pat)_[A-Za-z0-9_]{10,}/g, "[REDACTED-GITHUB-TOKEN]"],

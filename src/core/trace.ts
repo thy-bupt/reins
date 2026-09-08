@@ -308,6 +308,21 @@ export interface VerifyResult {
 class CorruptTraceError extends Error {}
 
 export async function readTrace(filePath: string): Promise<TraceEvent[]> {
+  // reject symlinks on the READ path too — append refuses symlinked ledgers
+  // (O_NOFOLLOW), so verification/read must not follow a link planted outside
+  // the sessions boundary and present it as trusted
+  try {
+    const lst = await lstat(filePath);
+    if (lst.isSymbolicLink()) {
+      throw new Error(`refusing to read trace through a symlink: ${filePath}`);
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("refusing to read trace through a symlink")) throw err;
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(`trace file not found: ${filePath}`, { cause: err });
+    }
+    throw new Error(`cannot read trace file ${filePath}: ${String(err)}`, { cause: err });
+  }
   let content: string;
   try {
     content = await readFile(filePath, "utf8");
@@ -362,6 +377,11 @@ export async function verifyTrace(filePath: string): Promise<VerifyResult> {
     events = await readTrace(filePath);
   } catch (err) {
     if (err instanceof CorruptTraceError) {
+      return { ok: false, events: 0, reason: err.message };
+    }
+    // a symlinked ledger is a security refusal, reported as a verification
+    // failure so read-only callers (MCP, TUI, CLI) degrade gracefully
+    if (err instanceof Error && err.message.includes("symlink")) {
       return { ok: false, events: 0, reason: err.message };
     }
     throw err;

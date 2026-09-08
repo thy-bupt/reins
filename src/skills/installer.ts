@@ -11,12 +11,13 @@ export const SKILL_NAMES = ["reins-selfcheck", "reins-incident"] as const;
 export type SkillName = (typeof SKILL_NAMES)[number];
 
 /** Skills install as <targetBase>/<skill>/SKILL.md (Claude Code convention:
- *  targetBase defaults to ~/.claude/skills). Idempotent, marker-verified on
- *  uninstall so user-modified skills are never silently destroyed. */
+ *  targetBase defaults to ~/.claude/skills). Idempotent, marker-verified:
+ *  an existing file that is not one of ours (user-created or user-modified)
+ *  is never overwritten — the CLI fails closed and points the user at it. */
 export async function installSkill(
   skill: SkillName,
   targetBase: string,
-): Promise<{ changed: boolean; path: string }> {
+): Promise<{ changed: boolean; path: string; refused?: boolean }> {
   const source = join(BUNDLED_SKILLS_DIR, skill, "SKILL.md");
   if (!existsSync(source)) {
     throw new Error(`bundled skill not found: ${source}`);
@@ -27,6 +28,11 @@ export async function installSkill(
   const content = await readFile(source, "utf8");
   if (existing === content) {
     return { changed: false, path: dest };
+  }
+  // an existing file that is not byte-identical to ours is either a foreign
+  // file or a user-modified copy — never clobber it
+  if (existing !== null) {
+    return { changed: false, path: dest, refused: true };
   }
   await copyFile(source, dest);
   return { changed: true, path: dest };

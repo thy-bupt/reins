@@ -5,15 +5,12 @@ const CODEX_EVENT = "PreToolUse";
 
 /** Codex reads ~/.codex/hooks.json (same shape Claude Code uses), gated by
  *  `[features] hooks = true` in config.toml. No matcher: every tool call is
- *  policy-checked. */
+ *  policy-checked. A non-empty file we cannot parse is NOT ours to replace —
+ *  ownership is preserved by refusing (fail-closed). */
 export function codexHooksFileContent(existingContent: string | null): string {
   let existing: unknown = {};
   if (existingContent !== null && existingContent.trim() !== "") {
-    try {
-      existing = JSON.parse(existingContent);
-    } catch {
-      existing = {};
-    }
+    existing = JSON.parse(existingContent); // throws on foreign/malformed
   }
   const { settings } = mergeHooksEntry(existing, {
     event: CODEX_EVENT,

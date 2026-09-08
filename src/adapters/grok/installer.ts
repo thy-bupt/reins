@@ -7,15 +7,12 @@ export const GROK_EVENT = "PreToolUse";
  *  is {"hooks": {"PreToolUse": [group, ...]}}. We omit `matcher` so every
  *  tool call is policy-checked; non-command/file inputs fall through to the
  *  policy default. Existing groups (the user's own or other tools') in the
- *  same reins file are preserved. */
+ *  same reins file are preserved. A non-empty file we cannot parse is NOT
+ *  ours to replace — ownership is preserved by refusing (fail-closed). */
 export function grokHooksFileContent(existingContent: string | null): string {
   let existing: unknown = {};
   if (existingContent !== null && existingContent.trim() !== "") {
-    try {
-      existing = JSON.parse(existingContent);
-    } catch {
-      existing = {};
-    }
+    existing = JSON.parse(existingContent); // throws on foreign/malformed
   }
   const { settings } = mergeHooksEntry(existing, {
     event: GROK_EVENT,
