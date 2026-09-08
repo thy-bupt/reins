@@ -66,6 +66,16 @@ $ reins doctor
 reins looks healthy.
 ```
 
+## 实机效果
+
+来自真实 reins 安装的截图（macOS 终端，深色主题）。第一张是 hook 拦截递归删除；
+第二张是 `reins doctor` 检出某个项目——agent hook 存在但都不是 reins 的（它会明确告诉你
+`reins init <agent>` 将安装什么）。
+
+![reins hook 拦截 `rm -rf`](docs/demo-hook-block.png)
+
+![`reins doctor` 体检](docs/demo-doctor.png)
+
 ## 编写策略
 
 `~/.reins/policy.yaml`（由 `reins init` 安装，可编辑，每次判决热加载）：
