@@ -196,7 +196,7 @@ reins 的核心选择与 agent 安全文献一致：以**系统设计而非模�
 
 把机器托付给任何工具之前，请先读这一节：
 
-- **reins 不是 OS 沙箱**。它是策略与审计层。解析器覆盖包装旗标（`sudo -u`、`env --`、`xargs -0`）、控制流关键字、`${IFS}` 混淆、命令替换（`$(…)`、反引号）与解释器递归（`bash -c "…"`），但足够有创造力的 agent 仍可能找到未分类的形态。要硬隔离请与 bubblewrap/Seatbelt、microVM（microsandbox）或 [Claude Code sandboxing](https://code.claude.com/docs/en/hooks#sandboxing) 叠加——互补而非替代。
+- **reins 不是 OS 沙箱**。它是策略与审计层。解析器覆盖预期内的技术族——包装旗标、控制流关键字、空白变量混淆、命令替换与带引号的解释器递归（确切语料见绕过测试集）——但足够有创造力的 agent 仍可能找到未分类的形态。要硬隔离请与 bubblewrap/Seatbelt、microVM（microsandbox）或 [Claude Code sandboxing](https://code.claude.com/docs/en/hooks#sandboxing) 叠加——互补而非替代。
 - **命令解析是启发式的**。覆盖组合短旗标、包装二进制（`sudo`、`env`、`xargs`…）、绝对程序路径、子命令与 `-exec` 式内嵌执行；不做完整 shell 语义。绕过测试集（`test/decider.test.ts`）就是契约——提交新的绕过用例是最有价值的贡献。
 - **追踪是防篡改可证（tamper-evident）而非防篡改（tamper-proof）**。对 `~/.reins/sessions` 有文件系统写权限者可以删除整个文件——哈希链证明的是*被修改*，不是*未被删除*。高风险场景请限制权限或将账本外送。
 - **策略本身尚未签名**。能写 `~/.reins/policy.yaml` 的 agent 可以先放宽策略再做你要禁止的事。策略完整性校验是 roadmap 首位；在此之前保持 `~/.reins` 仅本人可写，并把 `reins doctor` 纳入日常。
