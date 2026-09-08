@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import { mkdtemp, readFile, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -124,7 +124,16 @@ describe.skipIf(!GIT_OK)("collectGitContext (real git repo)", () => {
 
     const ctx = await collectGitContext([join(repo, "a.ts")], false);
     expect(ctx).not.toBeNull();
-    expect(realpathSync(ctx!.repoRoot)).toBe(realpathSync(repo)); // macOS /tmp is a symlink
+    if (process.platform === "win32") {
+      // 8.3 short names (RUNNER~1 vs runneradmin) make string comparison
+      // unreliable on Windows — compare file identity instead.
+      const a = statSync(ctx!.repoRoot);
+      const b = statSync(repo);
+      expect(a.dev).toBe(b.dev);
+      expect(a.ino).toBe(b.ino);
+    } else {
+      expect(realpathSync(ctx!.repoRoot)).toBe(realpathSync(repo)); // macOS /tmp is a symlink
+    }
     expect(ctx!.subject).toBe("init commit");
     expect(ctx!.dirty.join("\n")).toContain("a.ts");
 

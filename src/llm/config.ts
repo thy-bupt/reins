@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 export type LlmProvider = "none" | "command" | "openai";
@@ -95,7 +95,7 @@ export function writeLang(lang: Lang, configPath = llmConfigPath()): void {
     } catch { doc = {}; }
   }
   doc["lang"] = lang;
-  const dir = configPath.substring(0, configPath.lastIndexOf("/")) || ".";
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // dirname() not the string trick: Windows paths use backslashes
+  mkdirSync(dirname(configPath), { recursive: true, mode: 0o700 });
   writeFileSync(configPath, JSON.stringify(doc, null, 2) + "\n", { encoding: "utf8", mode: 0o600 });
 }

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { resolveShellCommand } from "../core/matchers.js";
 import type { LlmConfig } from "./config.js";
 
 export class LlmNotConfiguredError extends Error {}
@@ -75,7 +76,14 @@ export async function completePrompt(prompt: string, cfg: LlmConfig): Promise<st
 
 async function completeViaCommand(prompt: string, cfg: LlmConfig): Promise<string> {
   return new Promise<string>((resolve, reject) => {
-    const child = spawn("/bin/sh", ["-c", cfg.command!], {
+    // same deliberate platform shell as the exec engine (H1: checked string
+    // and executed content must never diverge) — /bin/sh does not exist on
+    // win32, where the default interpreter is cmd.exe
+    const { file, args } = resolveShellCommand(
+      process.platform === "win32" ? "win32" : "posix",
+      cfg.command!,
+    );
+    const child = spawn(file, args, {
       stdio: ["pipe", "pipe", "pipe"],
     });
     let out = "";

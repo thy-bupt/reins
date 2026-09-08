@@ -187,7 +187,9 @@ describe.skipIf(!cli)("concurrent hooks (Codex finding 2: ledger chain under par
 });
 
 describe("trace + config permissions (Codex finding 4.3)", () => {
-  it("creates sessions dir 0700 and trace files 0600", async () => {
+  // POSIX mode bits don't exist on win32 (chmod only toggles read-only) —
+  // the 0700/0600 contract is a posix guarantee; Windows relies on ACLs.
+  it.skipIf(process.platform === "win32")("creates sessions dir 0700 and trace files 0600", async () => {
     const h = home();
     const payload = JSON.stringify({ session_id: "perm", tool_name: "Bash", tool_input: { command: "ls" } });
     await runHook(h, payload);
@@ -195,7 +197,7 @@ describe("trace + config permissions (Codex finding 4.3)", () => {
     expect(statSync(join(h, "sessions", "claude-perm.jsonl")).mode & 0o777).toBe(0o600);
   });
 
-  it("preserves 0600 on settings through init (no mode widening)", async () => {
+  it.skipIf(process.platform === "win32")("preserves 0600 on settings through init (no mode widening)", async () => {
     const h = home();
     const settings = join(h, "settings.json");
     writeFileSync(settings, "{}", { mode: 0o600 });

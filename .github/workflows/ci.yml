@@ -77,7 +77,12 @@ jobs:
         run: |
           export HOME=$(mktemp -d)
           reins init claude
-          echo '{"session_id":"ci","tool_name":"Bash","tool_input":{"command":"rm -rf /x"}}' | reins hook claude; echo "hook exit=$? (expect 2)"
+          set +e
+          echo '{"session_id":"ci","tool_name":"Bash","tool_input":{"command":"rm -rf /x"}}' | reins hook claude
+          hook_ec=$?
+          set -e
+          echo "hook exit=$hook_ec (expect 2)"
+          test "$hook_ec" -eq 2
           reins trace export --format ndjson | grep -q rm-recursive
           reins uninstall claude
           ! grep -q "reins hook" "$HOME/.claude/settings.json"

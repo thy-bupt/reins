@@ -76,7 +76,9 @@ describe("P0: ledger directory boundary (round-5 review)", () => {
     expect(existsSync(join(realHome, "sessions"))).toBe(false);
   });
 
-  it.skipIf(!cli)("init creates .reins and sessions with mode 0700 (round-5: init left 0755)", async () => {
+  // POSIX mode bits are not representable on win32 (chmod only toggles
+  // read-only) — the 0700 contract is asserted on posix only.
+  it.skipIf(!cli || process.platform === "win32")("init creates .reins and sessions with mode 0700 (round-5: init left 0755)", async () => {
     const h = await mkdtemp(join(tmpdir(), "reins-initmode-"));
     writeFileSync(join(h, "policy.yaml"), POLICY);
     const r = spawnSync(process.execPath, [DIST, "init", "claude"], {
@@ -88,7 +90,7 @@ describe("P0: ledger directory boundary (round-5 review)", () => {
     expect(octalMode(join(h, ".reins", "sessions"))).toBe("700"); // sessions
   });
 
-  it("init heals a pre-existing world-readable sessions dir", async () => {
+  it.skipIf(process.platform === "win32")("init heals a pre-existing world-readable sessions dir", async () => {
     const h = await mkdtemp(join(tmpdir(), "reins-initmode-"));
     writeFileSync(join(h, "policy.yaml"), POLICY);
     const sessions = join(h, ".reins", "sessions");
