@@ -1,5 +1,5 @@
 {
-  "name": "reins",
+  "name": "@tanghuiyi/reins",
   "version": "0.10.1",
   "description": "Fail-closed safety rail for AI coding agents: declarative policy engine, tamper-evident trace, session replay. Agent-agnostic, local-first.",
   "type": "module",

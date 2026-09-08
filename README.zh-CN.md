@@ -7,7 +7,7 @@ reins 是一个本地、确定性的 **可验证执行证据层**：在工具调
 英文文档见 [README.md](README.md)。
 
 ```bash
-npm i -g reins
+npm i -g @tanghuiyi/reins
 reins init claude
 ```
 

@@ -26,7 +26,7 @@ The workflow (`.github/workflows/ci.yml`) runs lint + build + tests on Node
 
 ```bash
 npm login                           # 🔒
-npm publish --access public         # package name "reins" was verified available
+npm publish --access public         # published as @tanghuiyi/reins — unscoped "reins" is blocked by npm name policy
 git tag vX.Y.Z && git push origin vX.Y.Z   # tag the exact release commit first
 ```
 

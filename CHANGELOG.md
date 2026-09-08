@@ -9,6 +9,14 @@ Round-6 independent security review (Codex, 2026-09-08) plus a release-audit
 pass: every release-blocking finding is fixed below. The npm artifact, git tag
 (`v0.10.1`) and this changelog refer to the same commit.
 
+### Changed
+- **Published as `@tanghuiyi/reins`** — npm's name policy blocks the unscoped
+  name `reins` (registry PUT returns 403 before any auth challenge; a scoped
+  probe and a unique-name probe both reach the normal auth flow, isolating the
+  block to the name itself). The CLI command is unchanged: the package still
+  registers the `reins` binary, so `npm i -g @tanghuiyi/reins && reins init
+  claude` works exactly as documented.
+
 ### Fixed
 - **Policy bypasses closed (round-6 Codex review)** — `$IFS` (unbraced)
   whitespace expansion, ANSI-C-quoted interpreter scripts

@@ -13,7 +13,7 @@ which policy, and whether the record itself can be trusted. Agent-agnostic,
 local-first, one npm install.
 
 ```bash
-npm i -g reins
+npm i -g @tanghuiyi/reins
 reins init claude
 ```
 
