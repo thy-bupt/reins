@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>reins — 让 AI 编码智能体可控可证</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3;
+    --muted:#8b949e; --accent:#58a6ff; --green:#3fb950; --red:#f85149;
+    --yellow:#d29922; --radius:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* Hero */
+  .hero{padding:88px 0 64px;border-bottom:1px solid var(--border);text-align:center;
+    background:radial-gradient(1200px 400px at 50% -80px, rgba(88,166,255,.16), transparent)}
+  .hero .tag{display:inline-block;font-size:13px;letter-spacing:.08em;color:var(--accent);
+    border:1px solid var(--border);padding:6px 14px;border-radius:999px;margin-bottom:24px;
+    background:rgba(88,166,255,.06)}
+  .hero h1{font-size:56px;font-weight:800;letter-spacing:-.02em;margin-bottom:16px}
+  .hero h1 .dot{color:var(--accent)}
+  .hero p{font-size:19px;color:var(--muted);max-width:640px;margin:0 auto 36px}
+  .cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:13px 26px;border-radius:10px;
+    font-weight:600;font-size:16px;transition:transform .1s ease,box-shadow .2s ease}
+  .btn.primary{background:var(--accent);color:#0d1117}
+  .btn.primary:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(88,166,255,.35)}
+  .btn.ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
+  .btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+  .btn .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;opacity:.8}
+
+  /* Feature cards */
+  .section{padding:72px 0}
+  .section h2{font-size:34px;font-weight:800;margin-bottom:8px}
+  .section .lead{color:var(--muted);max-width:720px;margin-bottom:44px;font-size:17px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:26px;transition:transform .12s ease,border-color .2s ease}
+  .card:hover{transform:translateY(-4px);border-color:var(--accent)}
+  .card .ico{font-size:26px;margin-bottom:14px;display:block}
+  .card h3{font-size:19px;margin-bottom:10px}
+  .card p{color:var(--muted);font-size:15px}
+  .badge{display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px;
+    vertical-align:middle;margin-left:8px}
+  .badge.g{background:rgba(63,185,80,.15);color:var(--green)}
+  .badge.b{background:rgba(88,166,255,.15);color:var(--accent)}
+  .badge.y{background:rgba(210,153,34,.15);color:var(--yellow)}
+
+  /* Screenshots */
+  .shots{display:grid;gap:22px}
+  .shot{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    overflow:hidden}
+  .shot img{width:100%;display:block}
+  .shot .cap{padding:14px 20px;color:var(--muted);font-size:14px;border-top:1px solid var(--border)}
+  .shot .cap code{color:var(--text);background:rgba(88,166,255,.1);padding:2px 6px;border-radius:5px;
+    font-family:ui-monospace,Menlo,monospace;font-size:13px}
+
+  /* Install */
+  .install{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:12px 0}
+  .install ol{list-style:none;counter-reset:step}
+  .install li{counter-increment:step;padding:16px 26px;border-bottom:1px solid var(--border);
+    display:flex;gap:18px;align-items:flex-start}
+  .install li:last-child{border-bottom:none}
+  .install li::before{content:counter(step);flex:0 0 auto;width:30px;height:30px;border-radius:50%;
+    background:var(--accent);color:#0d1117;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .install .desc{color:var(--muted);font-size:15px}
+  .install code{display:inline-block;background:#0d1117;border:1px solid var(--border);border-radius:7px;
+    padding:5px 12px;font-family:ui-monospace,Menlo,monospace;font-size:14px;margin-top:8px;color:var(--green)}
+
+  /* Footnote */
+  .foot{padding:48px 0 72px;border-top:1px solid var(--border);text-align:center;color:var(--muted);font-size:14px}
+  .foot a{color:var(--accent)}
+
+  .footer-links{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:18px}
+  .chip{padding:8px 16px;border:1px solid var(--border);border-radius:999px;font-size:13px;color:var(--muted)}
+  .chip:hover{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="tag">本地 · 确定性 · 可验证</span>
+    <h1>reins<span class="dot">.</span></h1>
+    <p>握住你 AI 编码智能体的缰绳 —— 一个本地、确定性的<strong>可验证执行证据层</strong>：工具执行前的策略门，执行后的防篡改账本，以及回放与取证。</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/THY17308111153/reins" target="_blank" rel="noopener">
+        GitHub · 查看仓库
+      </a>
+      <a class="btn ghost" href="https://github.com/THY17308111153/reins/blob/main/README.zh-CN.md" target="_blank" rel="noopener">
+        <span class="mono">中文文档</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<section class="section" id="features">
+  <div class="wrap">
+    <h2>它做什么</h2>
+    <p class="lead">与沙箱叠加而非竞争：沙箱约束智能体*能碰到什么*，reins 证明*它请求过什么、依据哪套策略、记录本身是否可信*。</p>
+    <div class="grid">
+
+      <div class="card">
+        <span class="ico">🚦</span>
+        <h3>策略门 <span class="badge g">exec 前</span></h3>
+        <p>YAML 声明 <code>allow / ask / deny</code>。结构化匹配程序+旗标（含组合短旗标与包装感知：<code>rm -fr</code>、<code>sudo rm -rf</code>、<code>find -exec rm</code> 都归一到 <code>rm</code>）、原始正则抓 <code>curl … | sh</code>、路径 glob 保护 <code>.env</code> / <code>.ssh/</code> / <code>*.tfstate*</code>。</p>
+      </div>
+
+      <div class="card">
+        <span class="ico">⛓️</span>
+        <h3>防篡改账本 <span class="badge g">exec 后</span></h3>
+        <p>每次判决追加进 JSONL 会话文件，SHA-256 哈希链——每条记录承诺前一条。<code>reins trace verify</code> 校验；链条损坏时 hook <strong>拒绝继续记录</strong>（fail-closed）。</p>
+      </div>
+
+      <div class="card">
+        <span class="ico">🛡️</span>
+        <h3>默认 fail-closed</h3>
+        <p>载荷畸形、策略加载失败、账本被篡改 → 一律拦截。与"agent 删掉拦截它的 hook 后全部放行"（anthropics/claude-code#32990）的失效模式正好相反。</p>
+      </div>
+
+      <div class="card">
+        <span class="ico">🔁</span>
+        <h3>策略回放 <span class="badge b">绝不执行</span></h3>
+        <p><code>reins replay &lt;session&gt; --policy stricter.yaml</code> 用候选策略重放历史会话，报告"哪些会被拦"。只重演判决，不跑任何命令——在采纳更严策略前先验证。</p>
+      </div>
+
+      <div class="card">
+        <span class="ico">🧬</span>
+        <h3>6 个 agent 适配器</h3>
+        <p>Claude Code、Gemini CLI、Codex、Grok Build、opencode、pi 一个 <code>reins init</code> 装上钩子，外加通用 <code>reins exec --</code> 包住脚本/CI/其他 agent。所有适配器写入同一本账本，按 agent 分文件。</p>
+      </div>
+
+      <div class="card">
+        <span class="ico">🖥️</span>
+        <h3>双语 TUI <span class="badge y">v0.10</span></h3>
+        <p>裸 <code>reins</code> 或 <code>reins ui</code> 打开交互式会话浏览器：彩色判决时间线、事件钻取、就地校验。首次运行选语言（English / 中文），非 TTY 与 <code>NO_COLOR</code> 自动降级。</p>
+      </div>
+
+      <div class="card">
+        <span class="ico">🔍</span>
+        <h3>只读 MCP server</h3>
+        <p><code>reins mcp</code> 向 agent 暴露 <code>check_command</code>、<code>recent_decisions</code>、<code>policy_summary</code>、<code>stats</code>、<code>suggest_alternative</code>：撞墙前自查、回顾被拦记录、要更安全的替代表。工具全只读，hook 执行时重新判决。</p>
+      </div>
+
+      <div class="card">
+        <span class="ico">📸</span>
+        <h3>取证快照</h3>
+        <p><code>reins snapshot</code> 输出取证 Markdown 卷宗：完整性裁定、策略指纹、完整时间线、每个被改文件的 git 状态与恢复指引（<code>git restore</code> / <code>git reflog</code>）。篡改的账本也能出报告——证据保留、篡改被标注。</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="section" id="shots">
+  <div class="wrap">
+    <h2>实机效果</h2>
+    <p class="lead">真实 reins 安装（macOS 终端，深色主题）截图。</p>
+    <div class="shots">
+      <figure class="shot">
+        <img src="https://raw.githubusercontent.com/THY17308111153/reins/main/docs/demo-hook-block.png" alt="reins hook 拦截 rm -rf">
+        <figcaption class="cap"><code>reins hook claude</code> 拦截递归删除——规则名与理由直接回传给 agent。</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="https://raw.githubusercontent.com/THY17308111153/reins/main/docs/demo-doctor.png" alt="reins doctor 健康检查">
+        <figcaption class="cap"><code>reins doctor</code> 全面体检：策略、hook、全部 agent、账本完整性、项目级保护——全绿输出 `reins looks healthy.`。</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="install">
+  <div class="wrap">
+    <h2>安装 &amp; 使用</h2>
+    <p class="lead">三步开始，重启 agent 会话（或跑 <code>/hooks</code>）加载新 hook。</p>
+    <div class="install">
+      <ol>
+        <li>
+          <div>
+            <div>全局安装</div>
+            <code>npm i -g reins</code>
+          </div>
+        </li>
+        <li>
+          <div>
+            <div>为你的 agent 装上策略 + hook（自动备份原配置）</div>
+            <code>reins init claude &nbsp;|&nbsp; gemini &nbsp;|&nbsp; codex &nbsp;|&nbsp; grok &nbsp;|&nbsp; opencode &nbsp;|&nbsp; pi</code>
+          </div>
+        </li>
+        <li>
+          <div>
+            <div>日常使用（都是实时判定的只读/审计命令）</div>
+            <code>reins doctor</code> · <code>reins trace list</code> · <code>reins trace verify</code> · <code>reins trace show</code> · <code>reins trace export</code> · <code>reins replay &lt;session&gt; --policy y.yaml</code> · <code>reins snapshot</code> · <code>reins ui</code>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="wrap">
+    <p>reins 是策略与审计层，不是 OS 沙箱——够创造力的 agent 仍可能找到未分类形态。要硬隔离请与 bubblewrap/Seatbelt/microVM 叠加。</p>
+    <div class="footer-links">
+      <a class="chip" href="https://github.com/THY17308111153/reins" target="_blank" rel="noopener">GitHub 仓库</a>
+      <a class="chip" href="https://github.com/THY17308111153/reins/blob/main/README.md" target="_blank" rel="noopener">英文文档</a>
+      <a class="chip" href="https://github.com/THY17308111153/reins/blob/main/README.zh-CN.md" target="_blank" rel="noopener">中文文档</a>
+      <a class="chip" href="https://github.com/THY17308111153/reins/blob/main/LICENSE" target="_blank" rel="noopener">Apache-2.0</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
