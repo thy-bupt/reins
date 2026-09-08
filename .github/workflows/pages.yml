@@ -3,7 +3,8 @@ name: Deploy landing page to GitHub Pages
 on:
   push:
     branches: [main]
-    paths: ["docs/landing.html", "docs/demo-*.png", ".github/workflows/pages.yml"]
+    paths:
+      ["docs/index.html", "docs/landing.html", "docs/demo-*.png", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 # Pages builds and deploys from the docs/ folder. See repo Settings → Pages.

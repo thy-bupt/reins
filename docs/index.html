@@ -1,223 +1,1299 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>reins — 让 AI 编码智能体可控可证</title>
-<style>
-  :root{
-    --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3;
-    --muted:#8b949e; --accent:#58a6ff; --green:#3fb950; --red:#f85149;
-    --yellow:#d29922; --radius:12px;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html{scroll-behavior:smooth}
-  body{
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
-    background:var(--bg); color:var(--text); line-height:1.6; -webkit-font-smoothing:antialiased;
-  }
-  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
-  a{color:var(--accent);text-decoration:none}
-  a:hover{text-decoration:underline}
-
-  /* Hero */
-  .hero{padding:88px 0 64px;border-bottom:1px solid var(--border);text-align:center;
-    background:radial-gradient(1200px 400px at 50% -80px, rgba(88,166,255,.16), transparent)}
-  .hero .tag{display:inline-block;font-size:13px;letter-spacing:.08em;color:var(--accent);
-    border:1px solid var(--border);padding:6px 14px;border-radius:999px;margin-bottom:24px;
-    background:rgba(88,166,255,.06)}
-  .hero h1{font-size:56px;font-weight:800;letter-spacing:-.02em;margin-bottom:16px}
-  .hero h1 .dot{color:var(--accent)}
-  .hero p{font-size:19px;color:var(--muted);max-width:640px;margin:0 auto 36px}
-  .cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
-  .btn{display:inline-flex;align-items:center;gap:8px;padding:13px 26px;border-radius:10px;
-    font-weight:600;font-size:16px;transition:transform .1s ease,box-shadow .2s ease}
-  .btn.primary{background:var(--accent);color:#0d1117}
-  .btn.primary:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(88,166,255,.35)}
-  .btn.ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
-  .btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
-  .btn .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;opacity:.8}
-
-  /* Feature cards */
-  .section{padding:72px 0}
-  .section h2{font-size:34px;font-weight:800;margin-bottom:8px}
-  .section .lead{color:var(--muted);max-width:720px;margin-bottom:44px;font-size:17px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px}
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
-    padding:26px;transition:transform .12s ease,border-color .2s ease}
-  .card:hover{transform:translateY(-4px);border-color:var(--accent)}
-  .card .ico{font-size:26px;margin-bottom:14px;display:block}
-  .card h3{font-size:19px;margin-bottom:10px}
-  .card p{color:var(--muted);font-size:15px}
-  .badge{display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px;
-    vertical-align:middle;margin-left:8px}
-  .badge.g{background:rgba(63,185,80,.15);color:var(--green)}
-  .badge.b{background:rgba(88,166,255,.15);color:var(--accent)}
-  .badge.y{background:rgba(210,153,34,.15);color:var(--yellow)}
-
-  /* Screenshots */
-  .shots{display:grid;gap:22px}
-  .shot{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
-    overflow:hidden}
-  .shot img{width:100%;display:block}
-  .shot .cap{padding:14px 20px;color:var(--muted);font-size:14px;border-top:1px solid var(--border)}
-  .shot .cap code{color:var(--text);background:rgba(88,166,255,.1);padding:2px 6px;border-radius:5px;
-    font-family:ui-monospace,Menlo,monospace;font-size:13px}
-
-  /* Install */
-  .install{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:12px 0}
-  .install ol{list-style:none;counter-reset:step}
-  .install li{counter-increment:step;padding:16px 26px;border-bottom:1px solid var(--border);
-    display:flex;gap:18px;align-items:flex-start}
-  .install li:last-child{border-bottom:none}
-  .install li::before{content:counter(step);flex:0 0 auto;width:30px;height:30px;border-radius:50%;
-    background:var(--accent);color:#0d1117;font-weight:700;display:flex;align-items:center;justify-content:center}
-  .install .desc{color:var(--muted);font-size:15px}
-  .install code{display:inline-block;background:#0d1117;border:1px solid var(--border);border-radius:7px;
-    padding:5px 12px;font-family:ui-monospace,Menlo,monospace;font-size:14px;margin-top:8px;color:var(--green)}
-
-  /* Footnote */
-  .foot{padding:48px 0 72px;border-top:1px solid var(--border);text-align:center;color:var(--muted);font-size:14px}
-  .foot a{color:var(--accent)}
-
-  .footer-links{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:18px}
-  .chip{padding:8px 16px;border:1px solid var(--border);border-radius:999px;font-size:13px;color:var(--muted)}
-  .chip:hover{border-color:var(--accent);color:var(--accent)}
-</style>
-</head>
-<body>
-
-<header class="hero">
-  <div class="wrap">
-    <span class="tag">本地 · 确定性 · 可验证</span>
-    <h1>reins<span class="dot">.</span></h1>
-    <p>握住你 AI 编码智能体的缰绳 —— 一个本地、确定性的<strong>可验证执行证据层</strong>：工具执行前的策略门，执行后的防篡改账本，以及回放与取证。</p>
-    <div class="cta">
-      <a class="btn primary" href="https://github.com/THY17308111153/reins" target="_blank" rel="noopener">
-        GitHub · 查看仓库
-      </a>
-      <a class="btn ghost" href="https://github.com/THY17308111153/reins/blob/main/README.zh-CN.md" target="_blank" rel="noopener">
-        <span class="mono">中文文档</span>
-      </a>
-    </div>
-  </div>
-</header>
-
-<section class="section" id="features">
-  <div class="wrap">
-    <h2>它做什么</h2>
-    <p class="lead">与沙箱叠加而非竞争：沙箱约束智能体*能碰到什么*，reins 证明*它请求过什么、依据哪套策略、记录本身是否可信*。</p>
-    <div class="grid">
-
-      <div class="card">
-        <span class="ico">🚦</span>
-        <h3>策略门 <span class="badge g">exec 前</span></h3>
-        <p>YAML 声明 <code>allow / ask / deny</code>。结构化匹配程序+旗标（含组合短旗标与包装感知：<code>rm -fr</code>、<code>sudo rm -rf</code>、<code>find -exec rm</code> 都归一到 <code>rm</code>）、原始正则抓 <code>curl … | sh</code>、路径 glob 保护 <code>.env</code> / <code>.ssh/</code> / <code>*.tfstate*</code>。</p>
-      </div>
-
-      <div class="card">
-        <span class="ico">⛓️</span>
-        <h3>防篡改账本 <span class="badge g">exec 后</span></h3>
-        <p>每次判决追加进 JSONL 会话文件，SHA-256 哈希链——每条记录承诺前一条。<code>reins trace verify</code> 校验；链条损坏时 hook <strong>拒绝继续记录</strong>（fail-closed）。</p>
-      </div>
-
-      <div class="card">
-        <span class="ico">🛡️</span>
-        <h3>默认 fail-closed</h3>
-        <p>载荷畸形、策略加载失败、账本被篡改 → 一律拦截。与"agent 删掉拦截它的 hook 后全部放行"（anthropics/claude-code#32990）的失效模式正好相反。</p>
-      </div>
-
-      <div class="card">
-        <span class="ico">🔁</span>
-        <h3>策略回放 <span class="badge b">绝不执行</span></h3>
-        <p><code>reins replay &lt;session&gt; --policy stricter.yaml</code> 用候选策略重放历史会话，报告"哪些会被拦"。只重演判决，不跑任何命令——在采纳更严策略前先验证。</p>
-      </div>
-
-      <div class="card">
-        <span class="ico">🧬</span>
-        <h3>6 个 agent 适配器</h3>
-        <p>Claude Code、Gemini CLI、Codex、Grok Build、opencode、pi 一个 <code>reins init</code> 装上钩子，外加通用 <code>reins exec --</code> 包住脚本/CI/其他 agent。所有适配器写入同一本账本，按 agent 分文件。</p>
-      </div>
-
-      <div class="card">
-        <span class="ico">🖥️</span>
-        <h3>双语 TUI <span class="badge y">v0.10</span></h3>
-        <p>裸 <code>reins</code> 或 <code>reins ui</code> 打开交互式会话浏览器：彩色判决时间线、事件钻取、就地校验。首次运行选语言（English / 中文），非 TTY 与 <code>NO_COLOR</code> 自动降级。</p>
-      </div>
-
-      <div class="card">
-        <span class="ico">🔍</span>
-        <h3>只读 MCP server</h3>
-        <p><code>reins mcp</code> 向 agent 暴露 <code>check_command</code>、<code>recent_decisions</code>、<code>policy_summary</code>、<code>stats</code>、<code>suggest_alternative</code>：撞墙前自查、回顾被拦记录、要更安全的替代表。工具全只读，hook 执行时重新判决。</p>
-      </div>
-
-      <div class="card">
-        <span class="ico">📸</span>
-        <h3>取证快照</h3>
-        <p><code>reins snapshot</code> 输出取证 Markdown 卷宗：完整性裁定、策略指纹、完整时间线、每个被改文件的 git 状态与恢复指引（<code>git restore</code> / <code>git reflog</code>）。篡改的账本也能出报告——证据保留、篡改被标注。</p>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<section class="section" id="shots">
-  <div class="wrap">
-    <h2>实机效果</h2>
-    <p class="lead">真实 reins 安装（macOS 终端，深色主题）截图。</p>
-    <div class="shots">
-      <figure class="shot">
-        <img src="https://raw.githubusercontent.com/THY17308111153/reins/main/docs/demo-hook-block.png" alt="reins hook 拦截 rm -rf">
-        <figcaption class="cap"><code>reins hook claude</code> 拦截递归删除——规则名与理由直接回传给 agent。</figcaption>
-      </figure>
-      <figure class="shot">
-        <img src="https://raw.githubusercontent.com/THY17308111153/reins/main/docs/demo-doctor.png" alt="reins doctor 健康检查">
-        <figcaption class="cap"><code>reins doctor</code> 全面体检：策略、hook、全部 agent、账本完整性、项目级保护——全绿输出 `reins looks healthy.`。</figcaption>
-      </figure>
-    </div>
-  </div>
-</section>
-
-<section class="section" id="install">
-  <div class="wrap">
-    <h2>安装 &amp; 使用</h2>
-    <p class="lead">三步开始，重启 agent 会话（或跑 <code>/hooks</code>）加载新 hook。</p>
-    <div class="install">
-      <ol>
-        <li>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#07111f" />
+    <meta
+      name="description"
+      content="reins：AI coding agent 的本地、确定性、可验证执行证据层。执行前拦截，执行后留证。"
+    />
+    <title>reins · 让 AI 编码可控、可证</title>
+    <style>
+      :root {
+        --ink: #07111f;
+        --ink-2: #0d1b2e;
+        --panel: #10243a;
+        --line: rgba(201, 225, 241, 0.16);
+        --paper: #eaf3f4;
+        --muted: #9eb4c2;
+        --signal: #f6b73c;
+        --mint: #8de3c0;
+        --cyan: #86c9e9;
+        --danger: #ff8b78;
+        --max: 1180px;
+        --radius: 18px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        color: var(--paper);
+        background: var(--ink);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          "PingFang SC",
+          "Microsoft YaHei",
+          sans-serif;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      code,
+      .mono {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+      .wrap {
+        width: min(var(--max), calc(100% - 48px));
+        margin-inline: auto;
+      }
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        border-bottom: 1px solid var(--line);
+        background: rgba(7, 17, 31, 0.84);
+        backdrop-filter: blur(16px);
+      }
+      .nav {
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        font-size: 21px;
+      }
+      .mark {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        color: var(--ink);
+        background: var(--signal);
+        border-radius: 9px 9px 9px 3px;
+        font-size: 16px;
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .nav-links a:hover,
+      .nav-links a:focus-visible {
+        color: var(--paper);
+      }
+      .nav-cta {
+        color: var(--ink);
+        background: var(--signal);
+        padding: 9px 15px;
+        border-radius: 8px;
+        font-weight: 750;
+      }
+      .nav-cta:hover,
+      .nav-cta:focus-visible {
+        background: #ffd36d;
+      }
+      .hero {
+        position: relative;
+        overflow: hidden;
+        padding: 96px 0 86px;
+        border-bottom: 1px solid var(--line);
+      }
+      .hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.38;
+        background-image:
+          linear-gradient(rgba(134, 201, 233, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(134, 201, 233, 0.05) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: linear-gradient(to bottom, black, transparent 86%);
+      }
+      .hero::after {
+        content: "";
+        position: absolute;
+        width: 700px;
+        height: 500px;
+        right: -180px;
+        top: -160px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(246, 183, 60, 0.2), transparent 66%);
+        pointer-events: none;
+      }
+      .hero-grid {
+        position: relative;
+        display: grid;
+        grid-template-columns: 1.02fr 0.98fr;
+        align-items: center;
+        gap: 64px;
+      }
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 20px;
+        color: var(--mint);
+        font:
+          700 11px/1 "SFMono-Regular",
+          Consolas,
+          monospace;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .eyebrow::before {
+        content: "";
+        width: 24px;
+        height: 1px;
+        background: var(--mint);
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+      h1 {
+        max-width: 650px;
+        margin-bottom: 22px;
+        font-size: clamp(46px, 7vw, 84px);
+        line-height: 0.98;
+        letter-spacing: -0.075em;
+      }
+      h1 em {
+        color: var(--signal);
+        font-style: normal;
+      }
+      .hero-copy {
+        max-width: 590px;
+        color: var(--muted);
+        font-size: 18px;
+      }
+      .hero-copy strong {
+        color: var(--paper);
+        font-weight: 650;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 32px;
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        min-height: 46px;
+        padding: 0 18px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        font-size: 14px;
+        font-weight: 750;
+        transition:
+          transform 0.18s ease,
+          background 0.18s ease,
+          border-color 0.18s ease;
+      }
+      .button:hover,
+      .button:focus-visible {
+        transform: translateY(-2px);
+        border-color: var(--cyan);
+      }
+      .button.primary {
+        color: var(--ink);
+        background: var(--signal);
+        border-color: var(--signal);
+      }
+      .button.primary:hover,
+      .button.primary:focus-visible {
+        background: #ffd36d;
+        border-color: #ffd36d;
+      }
+      .button.secondary {
+        color: var(--paper);
+        background: rgba(255, 255, 255, 0.04);
+      }
+      .hero-note {
+        margin-top: 19px;
+        color: #708a9a;
+        font-size: 12px;
+      }
+      .terminal {
+        position: relative;
+        z-index: 1;
+        border: 1px solid rgba(141, 227, 192, 0.3);
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: #081522;
+        box-shadow:
+          0 28px 90px rgba(0, 0, 0, 0.28),
+          0 0 0 8px rgba(141, 227, 192, 0.03);
+      }
+      .terminal-bar {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 13px 16px;
+        border-bottom: 1px solid var(--line);
+        background: #0e2032;
+      }
+      .terminal-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #557083;
+      }
+      .terminal-dot:first-child {
+        background: var(--danger);
+      }
+      .terminal-dot:nth-child(2) {
+        background: var(--signal);
+      }
+      .terminal-dot:nth-child(3) {
+        background: var(--mint);
+      }
+      .terminal-title {
+        margin-left: auto;
+        color: #7690a0;
+        font:
+          11px "SFMono-Regular",
+          Consolas,
+          monospace;
+      }
+      .terminal-body {
+        padding: 24px;
+        font:
+          13px/1.75 "SFMono-Regular",
+          Consolas,
+          monospace;
+      }
+      .prompt {
+        color: var(--mint);
+      }
+      .command {
+        color: #e6f3f6;
+      }
+      .dim {
+        color: #6d8797;
+      }
+      .deny {
+        color: var(--danger);
+      }
+      .allow {
+        color: var(--mint);
+      }
+      .gold {
+        color: var(--signal);
+      }
+      .terminal-rule {
+        height: 1px;
+        margin: 17px 0;
+        background: var(--line);
+      }
+      .terminal-result {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 12px 13px;
+        border: 1px solid rgba(255, 139, 120, 0.32);
+        border-radius: 8px;
+        background: rgba(255, 139, 120, 0.07);
+      }
+      .result-label {
+        color: var(--danger);
+        font-weight: 800;
+      }
+      .result-code {
+        color: #b6c9d0;
+        font-size: 11px;
+      }
+      .stats {
+        border-bottom: 1px solid var(--line);
+        background: var(--ink-2);
+      }
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+      }
+      .stat {
+        padding: 24px 20px;
+        border-right: 1px solid var(--line);
+      }
+      .stat:last-child {
+        border-right: 0;
+      }
+      .stat-value {
+        color: var(--signal);
+        font:
+          700 25px/1 "SFMono-Regular",
+          Consolas,
+          monospace;
+      }
+      .stat-label {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .section {
+        padding: 106px 0;
+      }
+      .section.alt {
+        background: #091829;
+        border-block: 1px solid var(--line);
+      }
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 35px;
+        margin-bottom: 42px;
+      }
+      .section-kicker {
+        margin-bottom: 12px;
+        color: var(--signal);
+        font:
+          700 11px "SFMono-Regular",
+          Consolas,
+          monospace;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .section h2 {
+        max-width: 600px;
+        margin-bottom: 0;
+        font-size: clamp(31px, 4vw, 52px);
+        line-height: 1.03;
+        letter-spacing: -0.055em;
+      }
+      .section-intro {
+        max-width: 400px;
+        margin-bottom: 2px;
+        color: var(--muted);
+        font-size: 15px;
+      }
+      .pipeline {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.025);
+      }
+      .stage {
+        position: relative;
+        min-height: 230px;
+        padding: 26px;
+        border-right: 1px solid var(--line);
+      }
+      .stage:last-child {
+        border-right: 0;
+      }
+      .stage-num {
+        color: var(--signal);
+        font:
+          12px "SFMono-Regular",
+          Consolas,
+          monospace;
+      }
+      .stage-icon {
+        display: block;
+        margin: 32px 0 16px;
+        color: var(--mint);
+        font-size: 26px;
+      }
+      .stage h3 {
+        margin-bottom: 9px;
+        font-size: 18px;
+      }
+      .stage p {
+        margin-bottom: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .stage::after {
+        content: "→";
+        position: absolute;
+        right: -10px;
+        top: 50%;
+        z-index: 2;
+        color: var(--signal);
+        font-size: 18px;
+      }
+      .stage:last-child::after {
+        display: none;
+      }
+      .proof-layout {
+        display: grid;
+        grid-template-columns: 0.8fr 1.2fr;
+        gap: 60px;
+        align-items: start;
+      }
+      .proof-lead {
+        color: var(--muted);
+        font-size: 17px;
+      }
+      .proof-list {
+        margin: 32px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .proof-list li {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 13px;
+        color: #c6d5db;
+        font-size: 14px;
+      }
+      .proof-list li::before {
+        content: "✓";
+        color: var(--mint);
+        font-weight: 800;
+      }
+      .evidence-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: var(--panel);
+      }
+      .evidence-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .verified {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--mint);
+        font:
+          700 11px "SFMono-Regular",
+          Consolas,
+          monospace;
+      }
+      .verified::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--mint);
+        box-shadow: 0 0 12px var(--mint);
+      }
+      .evidence-body {
+        padding: 20px;
+        font:
+          12px/1.9 "SFMono-Regular",
+          Consolas,
+          monospace;
+      }
+      .evidence-row {
+        display: grid;
+        grid-template-columns: 128px 1fr;
+        gap: 14px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(201, 225, 241, 0.09);
+      }
+      .evidence-row:last-child {
+        border-bottom: 0;
+      }
+      .key {
+        color: #7794a4;
+      }
+      .value {
+        color: #dcebed;
+        overflow-wrap: anywhere;
+      }
+      .hash {
+        color: var(--cyan);
+      }
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+      }
+      .feature {
+        padding: 26px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: linear-gradient(145deg, rgba(20, 45, 70, 0.85), rgba(16, 36, 58, 0.7));
+      }
+      .feature:hover {
+        border-color: rgba(134, 201, 233, 0.46);
+      }
+      .feature-icon {
+        color: var(--signal);
+        font:
+          20px "SFMono-Regular",
+          Consolas,
+          monospace;
+      }
+      .feature h3 {
+        margin: 28px 0 9px;
+        font-size: 17px;
+      }
+      .feature p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .feature code {
+        color: var(--cyan);
+        font-size: 12px;
+      }
+      .adapters {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 60px;
+        align-items: center;
+      }
+      .adapter-table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        font-size: 13px;
+      }
+      .adapter-table th,
+      .adapter-table td {
+        padding: 14px 16px;
+        text-align: left;
+        border-bottom: 1px solid var(--line);
+      }
+      .adapter-table tr:last-child td {
+        border-bottom: 0;
+      }
+      .adapter-table th {
+        color: #7892a2;
+        background: rgba(255, 255, 255, 0.03);
+        font:
+          11px "SFMono-Regular",
+          Consolas,
+          monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .adapter-table td:first-child {
+        color: var(--paper);
+        font-weight: 700;
+      }
+      .adapter-table td:last-child {
+        color: var(--mint);
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 12px;
+      }
+      .adapter-copy p {
+        color: var(--muted);
+        font-size: 15px;
+      }
+      .adapter-copy .mini-note {
+        margin-top: 25px;
+        padding: 16px;
+        border-left: 2px solid var(--signal);
+        color: #bdd0d6;
+        background: rgba(246, 183, 60, 0.06);
+        font-size: 13px;
+      }
+      .install-panel {
+        display: grid;
+        grid-template-columns: 0.85fr 1.15fr;
+        gap: 48px;
+        padding: 38px;
+        border: 1px solid rgba(246, 183, 60, 0.35);
+        border-radius: var(--radius);
+        background: linear-gradient(120deg, rgba(246, 183, 60, 0.1), rgba(16, 36, 58, 0.68) 45%);
+      }
+      .install-panel h2 {
+        margin-bottom: 14px;
+        font-size: 35px;
+      }
+      .install-panel p {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .install-code {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        background: #07111f;
+      }
+      .code-tabs {
+        display: flex;
+        border-bottom: 1px solid var(--line);
+      }
+      .code-tab {
+        flex: 1;
+        padding: 11px;
+        color: var(--muted);
+        border: 0;
+        background: transparent;
+        font:
+          12px "SFMono-Regular",
+          Consolas,
+          monospace;
+        cursor: pointer;
+      }
+      .code-tab.active {
+        color: var(--signal);
+        background: rgba(246, 183, 60, 0.08);
+      }
+      .code-content {
+        padding: 20px;
+      }
+      .code-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 15px;
+        padding: 8px 0;
+        font:
+          13px/1.5 "SFMono-Regular",
+          Consolas,
+          monospace;
+      }
+      .code-line span {
+        color: #dcebed;
+      }
+      .copy {
+        padding: 4px 8px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        color: var(--muted);
+        background: transparent;
+        cursor: pointer;
+        font:
+          10px "SFMono-Regular",
+          Consolas,
+          monospace;
+      }
+      .copy:hover,
+      .copy:focus-visible {
+        color: var(--paper);
+        border-color: var(--cyan);
+      }
+      .code-content[data-tab="npx"] {
+        display: none;
+      }
+      .boundary {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .boundary-card {
+        padding: 25px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+      }
+      .boundary-card h3 {
+        margin-bottom: 10px;
+        font-size: 17px;
+      }
+      .boundary-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .boundary-card.safe {
+        border-color: rgba(141, 227, 192, 0.28);
+        background: rgba(141, 227, 192, 0.045);
+      }
+      .boundary-card.limit {
+        border-color: rgba(255, 139, 120, 0.22);
+        background: rgba(255, 139, 120, 0.035);
+      }
+      .boundary-card.safe h3 {
+        color: var(--mint);
+      }
+      .boundary-card.limit h3 {
+        color: var(--danger);
+      }
+      footer {
+        padding: 58px 0 34px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .footer-top {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 25px;
+      }
+      .footer-brand {
+        color: var(--paper);
+      }
+      .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        font-size: 13px;
+      }
+      .footer-links a:hover {
+        color: var(--paper);
+      }
+      .copyright {
+        margin-top: 54px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+        font:
+          11px "SFMono-Regular",
+          Consolas,
+          monospace;
+      }
+      :focus-visible {
+        outline: 2px solid var(--signal);
+        outline-offset: 3px;
+      }
+      @media (max-width: 900px) {
+        .hero-grid,
+        .proof-layout,
+        .adapters,
+        .install-panel {
+          grid-template-columns: 1fr;
+          gap: 42px;
+        }
+        .pipeline {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .stage:nth-child(2) {
+          border-right: 0;
+        }
+        .stage:nth-child(-n + 2) {
+          border-bottom: 1px solid var(--line);
+        }
+        .stage::after {
+          display: none;
+        }
+        .feature-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 620px) {
+        .wrap {
+          width: min(var(--max), calc(100% - 32px));
+        }
+        .nav-links a:not(.nav-cta) {
+          display: none;
+        }
+        .hero {
+          padding: 70px 0 62px;
+        }
+        .stats-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .stat:nth-child(2) {
+          border-right: 0;
+        }
+        .stat:nth-child(-n + 2) {
+          border-bottom: 1px solid var(--line);
+        }
+        .section {
+          padding: 72px 0;
+        }
+        .section-head {
+          display: block;
+        }
+        .section-intro {
+          margin-top: 18px;
+        }
+        .pipeline,
+        .feature-grid,
+        .boundary {
+          grid-template-columns: 1fr;
+        }
+        .stage,
+        .stage:nth-child(2) {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .stage:last-child {
+          border-bottom: 0;
+        }
+        .install-panel {
+          padding: 24px;
+        }
+        .footer-top {
+          display: block;
+        }
+        .footer-links {
+          margin-top: 25px;
+        }
+        .terminal-body {
+          padding: 18px;
+          font-size: 11px;
+        }
+        .evidence-row {
+          grid-template-columns: 100px 1fr;
+          gap: 9px;
+        }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .terminal {
+          animation: rise 0.7s ease both;
+        }
+        @keyframes rise {
+          from {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="nav wrap" aria-label="主导航">
+        <a class="brand" href="#top"
+          ><span class="mark">↯</span
+          ><span>reins<span style="color: var(--signal)">.</span></span></a
+        >
+        <div class="nav-links">
+          <a href="#how">工作方式</a><a href="#proof">证据</a><a href="#agents">适配器</a
+          ><a href="#install">快速开始</a
+          ><a
+            class="nav-cta"
+            href="https://github.com/THY17308111153/reins"
+            target="_blank"
+            rel="noopener"
+            >GitHub ↗</a
+          >
+        </div>
+      </nav>
+    </header>
+    <main id="top">
+      <section class="hero">
+        <div class="wrap hero-grid">
           <div>
-            <div>全局安装</div>
-            <code>npm i -g reins</code>
+            <div class="eyebrow">verifiable execution evidence</div>
+            <h1>让 AI 编码<br /><em>可控、可证。</em></h1>
+            <p class="hero-copy">
+              <strong>reins</strong> 是给 AI coding agent
+              的本地安全层：在工具执行前拦截，在执行后留下不可悄悄改写的证据。确定性、低延迟、默认离线。
+            </p>
+            <div class="actions">
+              <a class="button primary" href="#install">3 分钟开始使用 ↓</a
+              ><a
+                class="button secondary"
+                href="https://github.com/THY17308111153/reins/blob/main/README.zh-CN.md"
+                target="_blank"
+                rel="noopener"
+                >阅读中文文档 ↗</a
+              >
+            </div>
+            <p class="hero-note mono">npm i -g reins · Apache-2.0 · Node ≥ 20</p>
           </div>
-        </li>
-        <li>
+          <div class="terminal" aria-label="reins 拦截危险命令示例">
+            <div class="terminal-bar">
+              <i class="terminal-dot"></i><i class="terminal-dot"></i><i class="terminal-dot"></i
+              ><span class="terminal-title">reins / live decision</span>
+            </div>
+            <div class="terminal-body">
+              <div>
+                <span class="prompt">agent $</span>
+                <span class="command">rm -rf ./release-cache</span>
+              </div>
+              <div class="dim">&nbsp;&nbsp;normalizing command · loading policy</div>
+              <div class="terminal-rule"></div>
+              <div><span class="gold">policy</span>&nbsp;&nbsp;filesystem-destructive</div>
+              <div>
+                <span class="gold">trace</span>&nbsp;&nbsp;&nbsp;session claude-7b19 · seq 0042
+              </div>
+              <div><span class="gold">digest</span>&nbsp;&nbsp;sha256: 9e1c…d02a</div>
+              <div class="terminal-rule"></div>
+              <div class="terminal-result">
+                <span class="result-label">✕ DENY · command blocked</span
+                ><span class="result-code">exit 2</span>
+              </div>
+              <div style="margin-top: 14px" class="dim">
+                reason: destructive recursive delete<br />event committed to tamper-evident ledger
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="stats" aria-label="项目概览数据">
+        <div class="wrap stats-grid">
+          <div class="stat">
+            <div class="stat-value">292</div>
+            <div class="stat-label">自动化测试通过</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">6</div>
+            <div class="stat-label">原生 agent 适配器</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">~40ms</div>
+            <div class="stat-label">冷启动 hook 决策</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">0</div>
+            <div class="stat-label">执法路径上的 LLM / 网络</div>
+          </div>
+        </div>
+      </section>
+      <section class="section" id="how">
+        <div class="wrap">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">one continuous chain</div>
+              <h2>从请求到证据，<br />每一步都能复核。</h2>
+            </div>
+            <p class="section-intro">reins 把“agent 说它做了什么”变成可以独立检查的执行记录。</p>
+          </div>
+          <div class="pipeline">
+            <article class="stage">
+              <span class="stage-num">01 / BEFORE</span><span class="stage-icon">◈</span>
+              <h3>策略拦截</h3>
+              <p>YAML 声明 allow / ask / deny。程序、旗标、wrapper、正则和敏感路径在执行前判定。</p>
+            </article>
+            <article class="stage">
+              <span class="stage-num">02 / AFTER</span><span class="stage-icon">⛓</span>
+              <h3>链式账本</h3>
+              <p>每次判决写入 JSONL + SHA-256 哈希链。断链、篡改和策略漂移都会被标记。</p>
+            </article>
+            <article class="stage">
+              <span class="stage-num">03 / REPLAY</span><span class="stage-icon">↻</span>
+              <h3>策略复盘</h3>
+              <p>用候选策略重演历史会话，观察影响范围；只模拟判决，绝不执行命令。</p>
+            </article>
+            <article class="stage">
+              <span class="stage-num">04 / EVIDENCE</span><span class="stage-icon">▣</span>
+              <h3>取证快照</h3>
+              <p>输出完整性、时间线、git 关联与恢复指引，留下团队可以审阅的卷宗。</p>
+            </article>
+          </div>
+        </div>
+      </section>
+      <section class="section alt" id="proof">
+        <div class="wrap proof-layout">
           <div>
-            <div>为你的 agent 装上策略 + hook（自动备份原配置）</div>
-            <code>reins init claude &nbsp;|&nbsp; gemini &nbsp;|&nbsp; codex &nbsp;|&nbsp; grok &nbsp;|&nbsp; opencode &nbsp;|&nbsp; pi</code>
+            <div class="section-kicker">ground truth for agents</div>
+            <h2>口头汇报不算证据。</h2>
+            <p class="proof-lead">
+              agent 可能误解、夸大，甚至幻觉式地声称“已经拦截”。reins 的 ledger
+              不参与对话，只记录真实发生过的判决。
+            </p>
+            <ul class="proof-list">
+              <li>策略指纹绑定每一次决策</li>
+              <li>篡改后的账本拒绝继续追加</li>
+              <li>trace export 可交给 CI / SIEM</li>
+              <li>snapshot 关联 git 状态与恢复路径</li>
+            </ul>
           </div>
-        </li>
-        <li>
+          <div class="evidence-card">
+            <div class="evidence-head">
+              <span>claude / session-7b19.jsonl</span><span class="verified">CHAIN VERIFIED</span>
+            </div>
+            <div class="evidence-body">
+              <div class="evidence-row">
+                <span class="key">event_id</span
+                ><span class="value">evt_0042 · decision <span class="deny">DENY</span></span>
+              </div>
+              <div class="evidence-row">
+                <span class="key">tool</span
+                ><span class="value">Bash · rm -rf ./release-cache</span>
+              </div>
+              <div class="evidence-row">
+                <span class="key">rule</span><span class="value">filesystem-destructive</span>
+              </div>
+              <div class="evidence-row">
+                <span class="key">policy_digest</span
+                ><span class="value hash">sha256:9e1c…d02a</span>
+              </div>
+              <div class="evidence-row">
+                <span class="key">prev_hash</span><span class="value hash">sha256:a77b…0cc8</span>
+              </div>
+              <div class="evidence-row">
+                <span class="key">event_hash</span><span class="value hash">sha256:2ab4…a91f</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="wrap">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">designed for the messy middle</div>
+              <h2>足够确定，才能成为基础设施。</h2>
+            </div>
+            <p class="section-intro">
+              核心执法路径不依赖模型、网络或常驻进程；可选 LLM 只负责解释和提议。
+            </p>
+          </div>
+          <div class="feature-grid">
+            <article class="feature">
+              <span class="feature-icon">01</span>
+              <h3>策略是代码的近邻</h3>
+              <p>可读的 YAML policy，先命中先赢。把团队对危险操作的共识放进版本控制。</p>
+            </article>
+            <article class="feature">
+              <span class="feature-icon">02</span>
+              <h3>证据拥有自己的生命周期</h3>
+              <p>trace verify、replay、snapshot、export，分别服务于验证、改策、取证与外部系统。</p>
+            </article>
+            <article class="feature">
+              <span class="feature-icon">03</span>
+              <h3>MCP 只读，LLM 可选</h3>
+              <p>
+                MCP 查询和替代建议不会获得执法权。provider=none 是默认，安全路径永远不调用模型。
+              </p>
+            </article>
+            <article class="feature">
+              <span class="feature-icon">04</span>
+              <h3>从单次 hook 到团队审计</h3>
+              <p>
+                统一事件结构、policy digest 和 session 语义，让一次拦截能进入 CI、PR 与审计流程。
+              </p>
+            </article>
+            <article class="feature">
+              <span class="feature-icon">05</span>
+              <h3>真实 agent 协议适配</h3>
+              <p>
+                按官方 hook 协议接入，不要求 agent 改变工作方式；一个
+                <code>reins init</code> 完成安装。
+              </p>
+            </article>
+            <article class="feature">
+              <span class="feature-icon">06</span>
+              <h3>与 OS 沙箱互补</h3>
+              <p>reins 证明“请求了什么”；Seatbelt、bubblewrap、microVM 负责限制“能碰到什么”。</p>
+            </article>
+          </div>
+        </div>
+      </section>
+      <section class="section alt" id="agents">
+        <div class="wrap adapters">
           <div>
-            <div>日常使用（都是实时判定的只读/审计命令）</div>
-            <code>reins doctor</code> · <code>reins trace list</code> · <code>reins trace verify</code> · <code>reins trace show</code> · <code>reins trace export</code> · <code>reins replay &lt;session&gt; --policy y.yaml</code> · <code>reins snapshot</code> · <code>reins ui</code>
+            <div class="section-kicker">one policy · six entry points</div>
+            <h2>你用哪个 agent，<br />都从同一套证据开始。</h2>
+            <div class="adapter-copy">
+              <p>
+                每个 adapter 都把原生 payload 归一化到同一颗核心：normalize → decide → trace →
+                encode。策略、账本和复盘结果保持一致。
+              </p>
+              <div class="mini-note">
+                支持 Claude Code、Gemini CLI、Codex、Grok Build、OpenCode、Pi，以及任何可以调用
+                <code>reins exec --</code> 的脚本或 CI。
+              </div>
+            </div>
           </div>
-        </li>
-      </ol>
-    </div>
-  </div>
-</section>
-
-<footer class="foot">
-  <div class="wrap">
-    <p>reins 是策略与审计层，不是 OS 沙箱——够创造力的 agent 仍可能找到未分类形态。要硬隔离请与 bubblewrap/Seatbelt/microVM 叠加。</p>
-    <div class="footer-links">
-      <a class="chip" href="https://github.com/THY17308111153/reins" target="_blank" rel="noopener">GitHub 仓库</a>
-      <a class="chip" href="https://github.com/THY17308111153/reins/blob/main/README.md" target="_blank" rel="noopener">英文文档</a>
-      <a class="chip" href="https://github.com/THY17308111153/reins/blob/main/README.zh-CN.md" target="_blank" rel="noopener">中文文档</a>
-      <a class="chip" href="https://github.com/THY17308111153/reins/blob/main/LICENSE" target="_blank" rel="noopener">Apache-2.0</a>
-    </div>
-  </div>
-</footer>
-
-</body>
+          <table class="adapter-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>入口</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Claude Code</td>
+                <td>hook claude</td>
+              </tr>
+              <tr>
+                <td>Gemini CLI</td>
+                <td>hook gemini</td>
+              </tr>
+              <tr>
+                <td>Codex</td>
+                <td>hook codex</td>
+              </tr>
+              <tr>
+                <td>Grok Build</td>
+                <td>hook grok</td>
+              </tr>
+              <tr>
+                <td>OpenCode</td>
+                <td>hook opencode</td>
+              </tr>
+              <tr>
+                <td>Pi</td>
+                <td>hook pi</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="section" id="install">
+        <div class="wrap">
+          <div class="install-panel">
+            <div>
+              <div class="section-kicker">start in three commands</div>
+              <h2>先装上，<br />再让 agent 放心工作。</h2>
+              <p>安装会自动备份原配置。完成后重启 agent 会话，让新 hook 生效。</p>
+              <a
+                class="button primary"
+                style="margin-top: 16px"
+                href="https://github.com/THY17308111153/reins/blob/main/README.zh-CN.md#安装"
+                target="_blank"
+                rel="noopener"
+                >查看完整安装说明 ↗</a
+              >
+            </div>
+            <div class="install-code">
+              <div class="code-tabs">
+                <button class="code-tab active" data-tab="npm" type="button">npm</button
+                ><button class="code-tab" data-tab="npx" type="button">npx</button>
+              </div>
+              <div class="code-content" data-tab="npm">
+                <div class="code-line">
+                  <span>npm i -g reins</span
+                  ><button class="copy" data-copy="npm i -g reins" type="button">COPY</button>
+                </div>
+                <div class="code-line">
+                  <span>reins init claude</span
+                  ><button class="copy" data-copy="reins init claude" type="button">COPY</button>
+                </div>
+                <div class="code-line">
+                  <span>reins doctor</span
+                  ><button class="copy" data-copy="reins doctor" type="button">COPY</button>
+                </div>
+                <div class="code-line">
+                  <span>reins trace verify</span
+                  ><button class="copy" data-copy="reins trace verify" type="button">COPY</button>
+                </div>
+              </div>
+              <div class="code-content" data-tab="npx">
+                <div class="code-line">
+                  <span>npx reins@latest init claude</span
+                  ><button class="copy" data-copy="npx reins@latest init claude" type="button">
+                    COPY
+                  </button>
+                </div>
+                <div class="code-line">
+                  <span>npx reins@latest doctor</span
+                  ><button class="copy" data-copy="npx reins@latest doctor" type="button">
+                    COPY
+                  </button>
+                </div>
+                <div class="code-line">
+                  <span>npx reins@latest trace verify</span
+                  ><button class="copy" data-copy="npx reins@latest trace verify" type="button">
+                    COPY
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="section alt">
+        <div class="wrap">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">clear boundaries</div>
+              <h2>安全产品最重要的<br />一句话是“它不做什么”。</h2>
+            </div>
+            <p class="section-intro">透明的边界，让你知道何时叠加更强的隔离。</p>
+          </div>
+          <div class="boundary">
+            <article class="boundary-card safe">
+              <h3>reins 擅长什么</h3>
+              <p>
+                确定性策略判决、agent hook、篡改可见的执行账本、策略回放、git
+                关联快照、只读查询与可选建议。
+              </p>
+            </article>
+            <article class="boundary-card limit">
+              <h3>reins 不替代什么</h3>
+              <p>
+                它不是 OS 级沙箱，也不承诺覆盖全部 shell 语义。对不可信仓库或高风险环境，请叠加
+                bubblewrap、Seatbelt、microVM 或官方 sandbox。
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <div class="wrap">
+        <div class="footer-top">
+          <a class="brand footer-brand" href="#top"
+            ><span class="mark">↯</span
+            ><span>reins<span style="color: var(--signal)">.</span></span></a
+          >
+          <div class="footer-links">
+            <a href="https://github.com/THY17308111153/reins" target="_blank" rel="noopener"
+              >GitHub</a
+            ><a
+              href="https://github.com/THY17308111153/reins/blob/main/README.md"
+              target="_blank"
+              rel="noopener"
+              >Docs</a
+            ><a
+              href="https://github.com/THY17308111153/reins/blob/main/docs/evidence-agent.md"
+              target="_blank"
+              rel="noopener"
+              >Evidence</a
+            ><a
+              href="https://github.com/THY17308111153/reins/blob/main/LICENSE"
+              target="_blank"
+              rel="noopener"
+              >Apache-2.0</a
+            >
+          </div>
+        </div>
+        <div class="copyright">
+          LOCAL · DETERMINISTIC · VERIFIABLE&nbsp;&nbsp; / &nbsp;&nbsp;Built for agents that need an
+          audit trail.
+        </div>
+      </div>
+    </footer>
+    <script>
+      const tabs = document.querySelectorAll(".code-tab");
+      const contents = document.querySelectorAll(".code-content");
+      tabs.forEach((tab) =>
+        tab.addEventListener("click", () => {
+          tabs.forEach((item) => item.classList.toggle("active", item === tab));
+          contents.forEach((item) => {
+            item.style.display = item.dataset.tab === tab.dataset.tab ? "block" : "none";
+          });
+        }),
+      );
+      document.querySelectorAll("[data-copy]").forEach((button) =>
+        button.addEventListener("click", async () => {
+          const original = button.textContent;
+          try {
+            await navigator.clipboard.writeText(button.dataset.copy);
+            button.textContent = "COPIED";
+          } catch {
+            button.textContent = "SELECT";
+          }
+          setTimeout(() => {
+            button.textContent = original;
+          }, 1200);
+        }),
+      );
+    </script>
+  </body>
 </html>
