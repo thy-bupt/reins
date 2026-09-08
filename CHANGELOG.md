@@ -3,6 +3,25 @@
 All notable changes to reins are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is SemVer.
 
+## [0.10.0] - 2026-09-08
+
+Release renumbering: the package version is resynced to **0.10.0**, superseding
+the 0.3.x / 0.4.x prerelease numbering, so the npm artifact, this changelog
+and the git tag (`v0.10.0`) all agree. Everything recorded in the 0.4.0,
+0.3.3 and 0.3.2 sections below is included in this release.
+
+### Added
+- **Bilingual UI (English/中文)** — full i18n string table for the TUI and
+  CLI; language chosen by a first-run wizard and persisted in `config.yaml`
+  (fallback `~/.reins/config.yaml`); `reins ui` and the CLI read the stored
+  language (default `en`).
+- **README EN/ZH parity** — English and Chinese READMEs fully equivalent
+  (18-rule baseline, tfstate example, H1 note, compare table, architecture,
+  performance, FAQ, roadmap).
+
+### Changed
+- Release gate: independent review of the TUI remains pending before an npm
+  publish; the GitHub release is the current public artifact.
 ## [0.4.0] - 2026-09-07
 
 ### Added
