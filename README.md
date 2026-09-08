@@ -36,8 +36,9 @@ reins is the lightweight layer between them: policy + audit + replay, in process
 - **Replay** — `reins replay <session> --policy stricter.yaml` re-evaluates a recorded session against a candidate policy and reports what *would* have been blocked. Nothing is executed.
 - **Doctor** — `reins doctor` checks policy validity, hook installation, and trace integrity, and tells you when you're running fail-open.
 - **MCP server (read-only)** — `reins mcp` exposes `check_command`,
-  `recent_decisions`, `policy_summary` and `stats` to the agent itself: it can
-  self-check proposals before hitting the wall and review its own denials.
+  `recent_decisions`, `policy_summary`, `stats` and `suggest_alternative` to
+  the agent itself: it can self-check proposals before hitting the wall,
+  review its own denials, and ask for safer alternatives when denied.
   Cooperative by design — the tools are read-only and the hook re-decides at
   execution time.
 - **Skills** — `reins init skills` installs two workflow skills:
@@ -81,7 +82,7 @@ $ reins trace verify
 ok: 47 events, hash chain intact — ~/.reins/sessions/claude-3f2a….jsonl
 
 $ reins doctor
- ✓ policy       13 rules, default=allow (~/.reins/policy.yaml)
+ ✓ policy       18 rules, default=allow (~/.reins/policy.yaml)
  ✓ claude-hook  installed in ~/.claude/settings.json
  ✓ traces       1 trace(s) verified, hash chains intact
 reins looks healthy.
@@ -134,6 +135,13 @@ rules:
     program: git
     subcommand: clean
     reason: "git clean deletes untracked files"
+
+  # learned from a real terraform repository: state files carry secrets
+  - id: protect-terraform-state
+    kind: path
+    action: deny
+    path: "**/*.tfstate*"
+    reason: "Terraform state contains secrets — manage it with terraform, never edit it directly"
 ```
 
 Rules are evaluated in order; **first match wins**. `ask` shows the agent's request to the human (Claude Code permission flow) in hooks, and is treated as deny in headless `exec` mode.
@@ -192,7 +200,7 @@ No daemon, no VM, no watcher. One short-lived process per decision:
 
 ## Performance
 
-One decision = one cold Node process: **~40 ms per tool call** on Apple Silicon (measured with the default 13-rule policy, including Node startup, policy load, matching, and trace append). For comparison, the shell command being vetted usually takes an order of magnitude longer.
+One decision = one cold Node process: **~40 ms per tool call** on Apple Silicon (measured with the default 18-rule policy, including Node startup, policy load, matching, and trace append). For comparison, the shell command being vetted usually takes an order of magnitude longer.
 
 ## Design grounding
 
@@ -218,7 +226,7 @@ Read this before trusting your machine to any tool, including this one:
 - **Command parsing is heuristic.** It handles combined short flags, wrapper binaries (`sudo`, `env`, `xargs`…), absolute program paths, subcommands, and embedded `-exec`-style execution. It does not attempt full shell semantics. The bypass test suite in `test/decider.test.ts` is the contract — PRs that add bypass cases are the most valuable contributions.
 - **The trace is tamper-*evident*, not tamper-*proof*.** An agent (or anything) with filesystem write access to `~/.reins/sessions` can delete the whole file — the hash chain proves *modification*, not *deletion*. Restrict permissions or ship traces off-box for high-stakes use.
 - **The policy itself is not signed yet.** An agent that can write to `~/.reins/policy.yaml` can weaken it before doing the thing you wanted to forbid. Policy integrity verification is the top roadmap item; until then, keep `~/.reins` writable only by you and let `reins doctor` be part of your routine.
-- **Windows is supported** (validated on real Windows hardware and a `windows-latest` CI job). The process layer hosts commands in `cmd.exe` by default Hook payloads come from each agent's Windows build (Codex additionally supports per-OS `commandWindows` overrides).
+- **Windows is supported** (validated on real Windows hardware and a `windows-latest` CI job). The process layer hosts commands in `cmd.exe` by default. The interpreter is deliberately not selectable — environment or caller overrides would let the checked string and the executed content diverge (finding H1 in the security audit). Hook payloads come from each agent's Windows build (Codex additionally supports per-OS `commandWindows` overrides).
 
 ## How it compares
 
@@ -273,6 +281,9 @@ Tampering with the trace is detected (hash chain) and blocks further logging —
 
 **Windows?**
 Yes — tested on real Windows hardware and a `windows-latest` CI job. `reins exec` hosts commands in `cmd.exe` on Windows (interpreter is deliberately not env-selectable — see H1 note in the security audit).
+
+**Does it have a GUI?**
+It has an interactive terminal browser: run bare `reins` or `reins ui` in a real terminal for a bilingual (English/中文) session browser — colored decision timelines, event drill-in, and in-place chain verification. First run asks for your language. Non-TTY stdout and `NO_COLOR` degrade to plain output automatically.
 
 ## Contributing
 
