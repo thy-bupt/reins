@@ -2,6 +2,8 @@
 
 **Hold the reins of your AI coding agent.**
 
+> **Language:** English · [中文](README.zh-CN.md)
+
 reins is a local, deterministic **verifiable execution evidence layer** for AI
 coding agents: deterministic policy decisions *before* a tool call runs, a
 tamper-evident event chain *after*, policy replay, and git-linked incident
