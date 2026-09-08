@@ -69,11 +69,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # scoped packages pack into a @scope/ subdirectory; npm parses an
-      # '@'-prefixed install arg as a package spec, so flatten the path first
+      # scoped pack filename flattens the scope: tanghuiyi-reins-<ver>.tgz
       - run: npm pack --pack-destination /tmp
-      - run: mv /tmp/@tanghuiyi/reins-*.tgz /tmp/reins-smoke.tgz
-      - run: npm install -g /tmp/reins-smoke.tgz
+      - run: npm install -g /tmp/tanghuiyi-reins-*.tgz
       - run: reins --version
       - run: reins policy eval "npm test"
       - name: full lifecycle smoke (isolated HOME)
